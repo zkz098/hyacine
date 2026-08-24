@@ -24,7 +24,7 @@ astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
 
 - [x] M0 设计定型（/grilling）
 - [x] M2 云端闭环：contract + api + cli（本地/远程/物化）
-- [ ] M3 管理台 SPA（SolidJS + UnoCSS + RemixIcon + Milkdown）
+- [x] M3 管理台 SPA（apps/console：统计/文章+AI 状态/sync/资产/令牌/设置）
 - [ ] M4 Tauri 桌面壳
 
 ## 本机验证（M2 验收路径）
