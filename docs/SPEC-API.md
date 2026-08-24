@@ -88,40 +88,40 @@ CREATE TABLE sync_logs (
 
 ## 环境变量（.dev.vars.example 列出全部；远程部署为 secrets）
 
-| 变量 | 用途 |
-|---|---|
-| `SETUP_CODE` | setup 一次性 code（≥8 字符），admin token 签发凭证 |
-| `AI_SUMMARY_ENDPOINT` | OpenAI 兼容 chat completions URL（BYOK） |
-| `AI_SUMMARY_KEY` | 用户自持 key |
-| `AI_SUMMARY_MODEL` | 模型名 |
-| `R2_S3_ENDPOINT` | `https://<account>.r2.cloudflarestorage.com` |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 S3 API 凭据（presign 用） |
-| `R2_BUCKET` | R2 bucket 名 |
-| `EMBED_MODEL` | 默认 `@cf/baai/bge-m3`（多语言，dim 1024）；换模型=旧向量作废（ai_results 按 model 区分） |
+| 变量                                        | 用途                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `SETUP_CODE`                                | setup 一次性 code（≥8 字符），admin token 签发凭证                                        |
+| `AI_SUMMARY_ENDPOINT`                       | OpenAI 兼容 chat completions URL（BYOK）                                                  |
+| `AI_SUMMARY_KEY`                            | 用户自持 key                                                                              |
+| `AI_SUMMARY_MODEL`                          | 模型名                                                                                    |
+| `R2_S3_ENDPOINT`                            | `https://<account>.r2.cloudflarestorage.com`                                              |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 S3 API 凭据（presign 用）                                                              |
+| `R2_BUCKET`                                 | R2 bucket 名                                                                              |
+| `EMBED_MODEL`                               | 默认 `@cf/baai/bge-m3`（多语言，dim 1024）；换模型=旧向量作废（ai_results 按 model 区分） |
 
 AI 配置探测 → health：`AI_SUMMARY_ENDPOINT && AI_SUMMARY_KEY && AI_SUMMARY_MODEL` 齐 = summary:true；`EMBED_MODEL` + AI binding = embed:true。
 
 ## 路由实现（必须与 contract client 一一对应）
 
-认证：除 `GET /api/health`、`GET /api/auth/setup`、`POST /api/auth/setup` 外全部需要 Bearer；scope 门禁：`posts.r`（listTokens 之外）、`posts.w`（sync/assets 写）、`ai`（ai/*）、`admin`（tokens 管理）。403 `forbidden`。
+认证：除 `GET /api/health`、`GET /api/auth/setup`、`POST /api/auth/setup` 外全部需要 Bearer；scope 门禁：`posts.r`（listTokens 之外）、`posts.w`（sync/assets 写）、`ai`（ai/\*）、`admin`（tokens 管理）。403 `forbidden`。
 
-| 方法+路径 | 行为 | scope |
-|---|---|---|
-| GET /api/health | 见上 | 公开 |
-| GET /api/auth/setup | `{needsSetup}`（无 SETUP_CODE secret 时为 true） | 公开 |
-| POST /api/auth/setup | 校验 code===SETUP_CODE（恒定时间比较）；签发 admin token（scopes 全四态）；存 sha256(token) 行；返回 token 明文一次 | 公开（code 即凭证） |
-| POST /api/auth/tokens | 建子 token（label/scopes/expiresInDays 可空=永不过期） | admin |
-| GET /api/auth/tokens | 列表（不返回 token 明文，只 id/label/scopes/expires/lastUsed/created/revoked） | admin |
-| POST /api/auth/tokens/:id/revoke | 置 revoked=1，revoke 自身返回 ok | admin |
-| POST /api/sync | 全量快照 diff：新/变更（hash 不同或无行）upsert；unchanged 跳过；deletedPaths 删行；assets upsert（is_remote=false 登记，remote 行存在才写）；写 sync_logs；返回 contract SyncUploadResponse，`ai.needs` 依据 ai_results 缺失情况 | posts.w |
-| GET /api/sync/log | 最近 50 条 | posts.r |
-| POST /api/ai/summary | BYOK：剥离 frontmatter（自己写 stripFrontmatter：首 `---\n...\n---` 块）→ 调 OpenAI 兼容端点（`/chat/completions`，messages system+user，max_tokens 取 env 或 200）；结果写 ai_results（hash 主键 upsert：summary/summary_model/summary_at）；**缓存命中**（同 hash 已有 summary 且模型相同）直接返回。端点失败 → 502 `ai_failed`（保留旧值；summary_error 不建列，失败不落库） | ai |
-| POST /api/ai/embed | 调 `env.AI.run(EMBED_MODEL, { text: chunks })` → `{data:[{embedding:number[]}]}`；mean 池化为文档向量；写 ai_results（embed_* 列）；响应只回 {hash, model, dim, chunkCount}（不回向量） | ai |
-| POST /api/ai/similar | 查 query hash 的 embed_vec；全表扫有向量的行（排除自身）cosine 排序 top-k；返回 items（path/slug/title/score，score∈[-1,1]）；无向量可达 → 404 `embedding_missing` | ai |
-| POST /api/ai/status | 批量 hashes → 每行 summary/embed present+model+at | ai |
-| POST /api/assets/presign | aws4fetch SigV4(PUT) 到 `${R2_S3_ENDPOINT}/${R2_BUCKET}/${key}`，过期 300s；返回 {key,url,method:'PUT',headers,expiresAt}；key 复用请求 key（R2 对象路径即 key，前缀可加 `remote/`） | posts.w |
-| POST /api/assets/register | upsert assets 行（is_remote=true, r2_key, checksum?, size?） | posts.w |
-| GET /api/stats | totals/byCategory（JSON 解析累加）/byMonth（created_at 前 7 字符）/assets(remote 计数) | posts.r |
+| 方法+路径                        | 行为                                                                                                                                                                                                                                                                                                                                                                            | scope               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| GET /api/health                  | 见上                                                                                                                                                                                                                                                                                                                                                                            | 公开                |
+| GET /api/auth/setup              | `{needsSetup}`（无 SETUP_CODE secret 时为 true）                                                                                                                                                                                                                                                                                                                                | 公开                |
+| POST /api/auth/setup             | 校验 code===SETUP_CODE（恒定时间比较）；签发 admin token（scopes 全四态）；存 sha256(token) 行；返回 token 明文一次                                                                                                                                                                                                                                                             | 公开（code 即凭证） |
+| POST /api/auth/tokens            | 建子 token（label/scopes/expiresInDays 可空=永不过期）                                                                                                                                                                                                                                                                                                                          | admin               |
+| GET /api/auth/tokens             | 列表（不返回 token 明文，只 id/label/scopes/expires/lastUsed/created/revoked）                                                                                                                                                                                                                                                                                                  | admin               |
+| POST /api/auth/tokens/:id/revoke | 置 revoked=1，revoke 自身返回 ok                                                                                                                                                                                                                                                                                                                                                | admin               |
+| POST /api/sync                   | 全量快照 diff：新/变更（hash 不同或无行）upsert；unchanged 跳过；deletedPaths 删行；assets upsert（is_remote=false 登记，remote 行存在才写）；写 sync_logs；返回 contract SyncUploadResponse，`ai.needs` 依据 ai_results 缺失情况                                                                                                                                               | posts.w             |
+| GET /api/sync/log                | 最近 50 条                                                                                                                                                                                                                                                                                                                                                                      | posts.r             |
+| POST /api/ai/summary             | BYOK：剥离 frontmatter（自己写 stripFrontmatter：首 `---\n...\n---` 块）→ 调 OpenAI 兼容端点（`/chat/completions`，messages system+user，max_tokens 取 env 或 200）；结果写 ai_results（hash 主键 upsert：summary/summary_model/summary_at）；**缓存命中**（同 hash 已有 summary 且模型相同）直接返回。端点失败 → 502 `ai_failed`（保留旧值；summary_error 不建列，失败不落库） | ai                  |
+| POST /api/ai/embed               | 调 `env.AI.run(EMBED_MODEL, { text: chunks })` → `{data:[{embedding:number[]}]}`；mean 池化为文档向量；写 ai*results（embed*\* 列）；响应只回 {hash, model, dim, chunkCount}（不回向量）                                                                                                                                                                                        | ai                  |
+| POST /api/ai/similar             | 查 query hash 的 embed_vec；全表扫有向量的行（排除自身）cosine 排序 top-k；返回 items（path/slug/title/score，score∈[-1,1]）；无向量可达 → 404 `embedding_missing`                                                                                                                                                                                                              | ai                  |
+| POST /api/ai/status              | 批量 hashes → 每行 summary/embed present+model+at                                                                                                                                                                                                                                                                                                                               | ai                  |
+| POST /api/assets/presign         | aws4fetch SigV4(PUT) 到 `${R2_S3_ENDPOINT}/${R2_BUCKET}/${key}`，过期 300s；返回 {key,url,method:'PUT',headers,expiresAt}；key 复用请求 key（R2 对象路径即 key，前缀可加 `remote/`）                                                                                                                                                                                            | posts.w             |
+| POST /api/assets/register        | upsert assets 行（is_remote=true, r2_key, checksum?, size?）                                                                                                                                                                                                                                                                                                                    | posts.w             |
+| GET /api/stats                   | totals/byCategory（JSON 解析累加）/byMonth（created_at 前 7 字符）/assets(remote 计数)                                                                                                                                                                                                                                                                                          | posts.r             |
 
 错误信封统一 `{error:{code,message,details?}}`。code 建议：`unauthorized`(401) / `forbidden`(403) / `setup_required`(400) / `invalid_code`(401) / `validation_error`(400) / `not_found`(404) / `conflict`(409) / `ai_failed`(502) / `ai_not_configured`(503) / `embedding_failed`(502) / `embedding_missing`(404) / `payload_too_large`(413)。
 

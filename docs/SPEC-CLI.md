@@ -51,39 +51,40 @@ src/
 ## 项目配置
 
 读取 `hyacine.yml`（astro-blog-shokax 已有此文件：contentDir/src/posts、assetsDir/src/assets 等）。`yaml` 包解析；缺失键用默认：
+
 - `contentDir` 默认 `src/posts`
 - `assetsDir` 默认 `src/assets`
 - `postExtension` 默认 `[".md", ".mdx"]`
-findProjectRoot：向上找 `hyacine.yml` 或含 `package.json` 的目录；找不到 → 错误 `not_in_project`（提示 `hyc init`）。
+  findProjectRoot：向上找 `hyacine.yml` 或含 `package.json` 的目录；找不到 → 错误 `not_in_project`（提示 `hyc init`）。
 
 ## 本地模式命令（无 API，全部可跑）
 
-| 命令 | 行为 |
-|---|---|
-| `hyc init` | 若缺 hyacine.yml 生成默认配置；建 contentDir/assetsDir；打印下一步 |
-| `hyc new [title]` | inquirer：标题→slug 化（中文转拼音可不做，保留原文 slugify 规则）、分类（多选）、标签、draft；写 md 模板（frontmatter: title/slug/date/categories/tags/draft）；打印路径；打开 $EDITOR（可选） |
-| `hyc list [query]` | 扫 contentDir，表格（title/slug/draft/updated），--json 输出源码；query 做模糊过滤 |
-| `hyc edit <query>` | 模糊查找（文件名/slug/title 子串）→ $EDITOR 打开（无 $EDITOR 用 `notepad`/EDITOR fallback 报错提示） |
-| `hyc rename <query> <new-name>` | 改文件名（slug 保持除非同名冲突），--also-slug 改 frontmatter slug |
-| `hyc move <query> <dest-dir>` | 移到分类目录（相对 contentDir） |
-| `hyc build` / `hyc preview` | 探测 package.json `astro build`/`astro preview`（或 `build` script），spawn 传递退码 |
-| `hyc deploy [message]` | git add -A → commit（默认 `chore: update blog <date>`）→ push 当前分支；--no-push 只 commit；非 git 仓库报错 |
-| `hyc backup` | tar.gz：contentDir+assetsDir+hyacine.yml+主题配置（若存在）→ `backups/hyacine-<ts>.tar.gz`（.gitignore 里加 backups/） |
-| `hyc theme:config view\|edit` | view 打印，edit 打开 $EDITOR |
+| 命令                            | 行为                                                                                                                                                                                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hyc init`                      | 若缺 hyacine.yml 生成默认配置；建 contentDir/assetsDir；打印下一步                                                                                                                             |
+| `hyc new [title]`               | inquirer：标题→slug 化（中文转拼音可不做，保留原文 slugify 规则）、分类（多选）、标签、draft；写 md 模板（frontmatter: title/slug/date/categories/tags/draft）；打印路径；打开 $EDITOR（可选） |
+| `hyc list [query]`              | 扫 contentDir，表格（title/slug/draft/updated），--json 输出源码；query 做模糊过滤                                                                                                             |
+| `hyc edit <query>`              | 模糊查找（文件名/slug/title 子串）→ $EDITOR 打开（无 $EDITOR 用 `notepad`/EDITOR fallback 报错提示）                                                                                           |
+| `hyc rename <query> <new-name>` | 改文件名（slug 保持除非同名冲突），--also-slug 改 frontmatter slug                                                                                                                             |
+| `hyc move <query> <dest-dir>`   | 移到分类目录（相对 contentDir）                                                                                                                                                                |
+| `hyc build` / `hyc preview`     | 探测 package.json `astro build`/`astro preview`（或 `build` script），spawn 传递退码                                                                                                           |
+| `hyc deploy [message]`          | git add -A → commit（默认 `chore: update blog <date>`）→ push 当前分支；--no-push 只 commit；非 git 仓库报错                                                                                   |
+| `hyc backup`                    | tar.gz：contentDir+assetsDir+hyacine.yml+主题配置（若存在）→ `backups/hyacine-<ts>.tar.gz`（.gitignore 里加 backups/）                                                                         |
+| `hyc theme:config view\|edit`   | view 打印，edit 打开 $EDITOR                                                                                                                                                                   |
 
 ## 远程模式命令（需 `hyc login`）
 
-| 命令 | 行为 |
-|---|---|
-| `hyc login` | 提示 api.url + setup code → `client.setup()` → conf 存 {api.url, api.token}；Health 探测 needsSetup 提示 |
-| `hyc logout` | 清 token |
-| `hyc status` | 模式、url、token label/scopes、上次 sync 时间、（远程）health + ai 配置状态 |
-| `hyc tokens:list` / `tokens:create <label> -s posts.r,ai` / `tokens:revoke <id>` | admin |
-| `hyc sync` | **全量快照**：扫 all posts（frontmatter 提取 path/slug/title/draft/categories + rapidhash 内容 hash + 时间戳）；扫 assetsDir 生成登记条目（is_remote=false, checksum, 图片/字体/其他分类）；deletedPaths = 上次快照有而本次无（conf 存 lastSync 快照）；`client.syncUpload()`；报告 accepted/changed/unchanged/deleted/ai.needs（表格）；存新快照 |
-| `hyc ai:summary <query\|--all> [--force] [--dry-run]` | 对选定 posts：读文件全文→`client.aiSummary({hash,content})`→**物化**：写回 frontmatter（summary/summaryModel/summarySourceHash/summaryUpdatedAt 四个日期键），report 已写文件；--force 忽略缓存；--dry-run 只打印不写 |
-| `hyc ai:similar <query>` | `client.aiSimilar({hash,limit})` → 表格（path/title/score） |
-| `hyc ai:embed <query\|--all>` | 本地切 chunk（最大 ~800 字符/段，按段落/句子切，重叠 0）→ `client.aiEmbed`，存 server 端 |
-| `hyc stats` | `client.stats()` → 表格（totals/categories 榜/byMonth 条/assets） |
+| 命令                                                                             | 行为                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hyc login`                                                                      | 提示 api.url + setup code → `client.setup()` → conf 存 {api.url, api.token}；Health 探测 needsSetup 提示                                                                                                                                                                                                                                          |
+| `hyc logout`                                                                     | 清 token                                                                                                                                                                                                                                                                                                                                          |
+| `hyc status`                                                                     | 模式、url、token label/scopes、上次 sync 时间、（远程）health + ai 配置状态                                                                                                                                                                                                                                                                       |
+| `hyc tokens:list` / `tokens:create <label> -s posts.r,ai` / `tokens:revoke <id>` | admin                                                                                                                                                                                                                                                                                                                                             |
+| `hyc sync`                                                                       | **全量快照**：扫 all posts（frontmatter 提取 path/slug/title/draft/categories + rapidhash 内容 hash + 时间戳）；扫 assetsDir 生成登记条目（is_remote=false, checksum, 图片/字体/其他分类）；deletedPaths = 上次快照有而本次无（conf 存 lastSync 快照）；`client.syncUpload()`；报告 accepted/changed/unchanged/deleted/ai.needs（表格）；存新快照 |
+| `hyc ai:summary <query\|--all> [--force] [--dry-run]`                            | 对选定 posts：读文件全文→`client.aiSummary({hash,content})`→**物化**：写回 frontmatter（summary/summaryModel/summarySourceHash/summaryUpdatedAt 四个日期键），report 已写文件；--force 忽略缓存；--dry-run 只打印不写                                                                                                                             |
+| `hyc ai:similar <query>`                                                         | `client.aiSimilar({hash,limit})` → 表格（path/title/score）                                                                                                                                                                                                                                                                                       |
+| `hyc ai:embed <query\|--all>`                                                    | 本地切 chunk（最大 ~800 字符/段，按段落/句子切，重叠 0）→ `client.aiEmbed`，存 server 端                                                                                                                                                                                                                                                          |
+| `hyc stats`                                                                      | `client.stats()` → 表格（totals/categories 榜/byMonth 条/assets）                                                                                                                                                                                                                                                                                 |
 
 **模式判定**：conf.api.url 存在 && 已 login → 远程；`--local` 强制本地（此时 ai/sync/stats/tokens 报错：`remote_only_required`）。**HyacineApiError 映射**：network_error→“无法连接 API，检查 hyc status”；unauthorized→“登录失效，请 hyc login”；ai_failed 等透传 message。
 

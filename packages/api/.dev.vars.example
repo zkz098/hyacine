@@ -1,0 +1,10 @@
+# 复制为 .dev.vars 填本地值（wrangler dev --local 自动加载）
+SETUP_CODE="changeme-setup-code-please-change"
+AI_SUMMARY_ENDPOINT="https://api.openai.com/v1/chat/completions"
+AI_SUMMARY_KEY="sk-..."
+AI_SUMMARY_MODEL="gpt-4o-mini"
+R2_S3_ENDPOINT="https://<account>.r2.cloudflarestorage.com"
+R2_ACCESS_KEY_ID="..."
+R2_SECRET_ACCESS_KEY="..."
+R2_BUCKET="hyacine-assets"
+EMBED_MODEL="@cf/baai/bge-m3"
