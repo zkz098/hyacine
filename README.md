@@ -37,6 +37,10 @@ cmd /c "scripts\build.bat build --manifest-path apps\desktop\src-tauri\Cargo.tom
 # 开发调试：pnpm --filter @hyacine/desktop dev（console dev 端口 5199）
 ```
 
+**桌面离线模式**：工作台/编辑器/Git 属文件平面——无需 API 登录即可用（严格切割）：
+选博客目录 → 编辑/新建文章 → git commit。云平面（仪表盘/文章索引/同步/令牌/AI 摘要）
+才需要登录；登录页可「跳过登录，进入本地模式」。
+
 ## 本机验证（M2 验收路径）
 
 ```bash
