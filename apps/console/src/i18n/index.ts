@@ -1,0 +1,92 @@
+const zhCN: Record<string, string> = {
+  "app.title": "hyacine 管理台",
+  "nav.dashboard": "仪表盘",
+  "nav.posts": "文章",
+  "nav.sync": "同步",
+  "nav.assets": "资产",
+  "nav.tokens": "令牌",
+  "nav.settings": "设置",
+  "nav.logout": "退出登录",
+  "login.title": "登录到 hyacine",
+  "login.apiUrl": "API 地址",
+  "login.apiUrl.placeholder": "https://your-api.workers.dev",
+  "login.code": "Setup Code",
+  "login.code.placeholder": "部署时配置的 SETUP_CODE",
+  "login.submit": "登录",
+  "login.needsSetup": "未检测到 SETUP_CODE，请在部署时配置环境变量",
+  "login.success": "登录成功",
+  "login.failed": "登录失败",
+  "dashboard.title": "仪表盘",
+  "dashboard.posts": "文章",
+  "dashboard.drafts": "草稿",
+  "dashboard.published": "已发布",
+  "dashboard.assets": "资产",
+  "dashboard.remote": "远程",
+  "dashboard.byMonth": "按月分布",
+  "dashboard.byCategory": "按分类",
+  "dashboard.refresh": "刷新",
+  "posts.title": "文章索引",
+  "posts.filter": "筛选标题 / slug",
+  "posts.refresh": "刷新",
+  "posts.empty": "暂无文章，请先通过 CLI 同步",
+  "posts.ai.summary": "摘要",
+  "posts.ai.embed": "嵌入",
+  "sync.title": "同步历史",
+  "sync.empty": "暂无同步记录",
+  "assets.title": "远程资产",
+  "assets.upload": "上传",
+  "assets.uploading": "上传中...",
+  "assets.empty": "暂无远程资产",
+  "assets.corsHint": "提示：R2 需配置 CORS 才能从浏览器直传，详见部署文档",
+  "tokens.title": "令牌管理",
+  "tokens.create": "创建令牌",
+  "tokens.label": "标签",
+  "tokens.scopes": "权限",
+  "tokens.expires": "有效期（天，留空永久）",
+  "tokens.submit": "创建",
+  "tokens.created": "令牌已创建，请立即复制（仅显示一次）",
+  "tokens.copy": "复制",
+  "tokens.copied": "已复制",
+  "tokens.revoke": "撤销",
+  "tokens.empty": "暂无令牌",
+  "settings.title": "设置",
+  "settings.apiUrl": "API 地址",
+  "settings.save": "保存",
+  "settings.saved": "已保存",
+  "settings.test": "测试连接",
+  "settings.theme": "主题",
+  "settings.theme.light": "亮色",
+  "settings.theme.dark": "暗色",
+  "settings.logout": "退出登录",
+  "settings.version": "版本",
+  "error.unauthorized": "登录已失效，请重新登录",
+  "error.network_error": "无法连接 API",
+  "error.ai_failed": "AI 服务错误",
+  "error.forbidden": "权限不足",
+  "common.loading": "加载中...",
+  "common.error": "加载失败",
+  "common.retry": "重试",
+};
+
+const en: Record<string, string> = {};
+
+const dicts: Record<string, Record<string, string>> = {
+  "zh-cn": zhCN,
+  en,
+};
+
+const locale = "zh-cn" as const;
+
+export function t(key: string, params?: Record<string, string>): string {
+  const dict = dicts[locale] ?? zhCN;
+  let text = dict[key] ?? zhCN[key] ?? key;
+  if (params !== undefined) {
+    for (const [k, v] of Object.entries(params)) {
+      text = text.replaceAll(`{${k}}`, v);
+    }
+  }
+  return text;
+}
+
+export const currentLocale = locale;
+export const zhCNDict = zhCN;

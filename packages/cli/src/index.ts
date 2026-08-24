@@ -35,7 +35,7 @@ function getProjectInfo() {
 }
 
 function isRemoteMode(): boolean {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- commander opts
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- commander opts
   const opts = program.opts() as { local?: boolean };
   if (opts.local === true) return false;
   const state = loadRemoteState();
@@ -129,7 +129,7 @@ program
           p.path.toLowerCase().includes(lower),
       );
     }
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- commander opts
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- commander opts
     const opts = program.opts() as { json?: boolean };
     if (opts.json === true) {
       console.log(JSON.stringify(filtered, null, 2));
@@ -431,7 +431,7 @@ program
     try {
       const client = getClient();
       const res = await client.listTokens();
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- commander opts
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- commander opts
       const opts = program.opts() as { json?: boolean };
       if (opts.json === true) {
         console.log(JSON.stringify(res, null, 2));
@@ -634,7 +634,7 @@ program
     try {
       const client = getClient();
       const res = await client.aiSimilar({ hash: found.hash, limit });
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- commander opts
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- commander opts
       const progOpts = program.opts() as { json?: boolean };
       if (progOpts.json === true) {
         console.log(JSON.stringify(res, null, 2));
@@ -707,7 +707,7 @@ program
     try {
       const client = getClient();
       const res = await client.stats();
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- commander opts
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion -- commander opts
       const opts = program.opts() as { json?: boolean };
       if (opts.json === true) {
         console.log(JSON.stringify(res, null, 2));
