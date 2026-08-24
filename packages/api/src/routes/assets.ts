@@ -1,5 +1,9 @@
 import { Hono } from "hono";
-import { PresignRequestSchema, RegisterAssetRequestSchema } from "@hyacine/contract";
+import {
+  AssetTypeSchema,
+  PresignRequestSchema,
+  RegisterAssetRequestSchema,
+} from "@hyacine/contract";
 import { errorBody } from "../utils/errors";
 import { createPresignedPutUrl } from "../utils/presign";
 import { authMiddleware } from "../middleware/auth";
@@ -72,5 +76,37 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       .run();
 
     return c.json({ path, registered: true });
+  });
+
+  app.get("/api/assets", authMiddleware(["posts.r"]), async (c) => {
+    const result = await c.env.DB.prepare(
+      `SELECT path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at
+       FROM assets
+       ORDER BY datetime(updated_at) DESC`,
+    ).all<{
+      path: string;
+      is_remote: number;
+      asset_type: string;
+      file_type: string;
+      r2_key: string | null;
+      checksum: string | null;
+      size: number | null;
+      updated_at: string;
+    }>();
+
+    const assets = result.results.map((row) => {
+      const assetType = AssetTypeSchema.safeParse(row.asset_type);
+      return {
+        path: row.path,
+        isRemote: row.is_remote === 1,
+        assetType: assetType.success ? assetType.data : "other",
+        fileType: row.file_type,
+        r2Key: row.r2_key,
+        checksum: row.checksum,
+        size: row.size,
+        updatedAt: row.updated_at,
+      };
+    });
+    return c.json({ assets });
   });
 }

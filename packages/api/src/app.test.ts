@@ -640,6 +640,86 @@ describe("assets", () => {
   });
 });
 
+describe("posts 查询", () => {
+  it("GET /api/posts 返回索引+AI 状态（join ai_results）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    const hash = "d".repeat(16);
+    // 先同步一篇文章（无 AI 产物）
+    await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "plain.md",
+            slug: "plain",
+            title: "Plain",
+            draft: false,
+            categories: ["a"],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+
+    const response = await request(env, "GET", "/api/posts", undefined, token);
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as {
+      posts: Array<{
+        path: string;
+        ai: { summary: { present: boolean }; embed: { present: boolean } };
+      }>;
+    };
+    expect(json.posts).toHaveLength(1);
+    expect(json.posts[0]?.path).toBe("plain.md");
+    expect(json.posts[0]?.ai.summary.present).toBe(false);
+    expect(json.posts[0]?.ai.embed.present).toBe(false);
+  });
+
+  it("GET /api/posts 无 token 401", async () => {
+    const env = createTestEnv();
+    const response = await request(env, "GET", "/api/posts");
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("assets 查询", () => {
+  it("GET /api/assets 返回登记资产列表", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    await request(
+      env,
+      "POST",
+      "/api/assets/register",
+      {
+        path: "img/cover.png",
+        assetType: "image",
+        fileType: "image/png",
+        r2Key: "remote/img/cover.png",
+      },
+      token,
+    );
+
+    const response = await request(env, "GET", "/api/assets", undefined, token);
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as { assets: Array<{ path: string; isRemote: boolean }> };
+    expect(json.assets).toHaveLength(1);
+    expect(json.assets[0]?.path).toBe("img/cover.png");
+    expect(json.assets[0]?.isRemote).toBe(true);
+  });
+});
+
 describe("stats", () => {
   it("aggregates totals, categories, months and assets", async () => {
     const env = createTestEnv();

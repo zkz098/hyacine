@@ -49,3 +49,31 @@ export const PostContentSchema = PostIndexEntrySchema.extend({
 });
 
 export type PostContent = z.infer<typeof PostContentSchema>;
+
+/** 列表项：索引 + AI 产物状态（console posts 页） */
+export const PostAiStatusSchema = z.object({
+  summary: z.object({
+    present: z.boolean(),
+    model: z.string().nullable(),
+    at: IsoDateSchema.nullable(),
+  }),
+  embed: z.object({
+    present: z.boolean(),
+    model: z.string().nullable(),
+    at: IsoDateSchema.nullable(),
+  }),
+});
+
+export type PostAiStatus = z.infer<typeof PostAiStatusSchema>;
+
+export const PostListItemSchema = PostIndexEntrySchema.extend({
+  ai: PostAiStatusSchema,
+});
+
+export type PostListItem = z.infer<typeof PostListItemSchema>;
+
+export const PostsListResponseSchema = z.object({
+  posts: z.array(PostListItemSchema),
+});
+
+export type PostsListResponse = z.infer<typeof PostsListResponseSchema>;

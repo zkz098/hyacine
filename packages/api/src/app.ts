@@ -6,6 +6,7 @@ import { syncRoutes } from "./routes/sync";
 import { aiRoutes } from "./routes/ai";
 import { assetsRoutes } from "./routes/assets";
 import { statsRoutes } from "./routes/stats";
+import { postsRoutes } from "./routes/posts";
 import { errorBody } from "./utils/errors";
 import type { Env, Variables } from "./types";
 
@@ -33,6 +34,7 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
   syncRoutes(app);
   aiRoutes(app);
   assetsRoutes(app);
+  postsRoutes(app);
   statsRoutes(app);
 
   return app;

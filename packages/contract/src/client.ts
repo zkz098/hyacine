@@ -11,6 +11,7 @@ import {
   SummaryResponseSchema,
 } from "./schemas/ai";
 import {
+  AssetsListResponseSchema,
   PresignRequestSchema,
   PresignResponseSchema,
   RegisterAssetRequestSchema,
@@ -27,6 +28,7 @@ import {
   TokenRevokeResponseSchema,
 } from "./schemas/auth";
 import { StatsResponseSchema } from "./schemas/stats";
+import { PostsListResponseSchema } from "./schemas/post";
 import {
   SyncLogResponseSchema,
   SyncUploadRequestSchema,
@@ -135,6 +137,12 @@ export class HyacineClient {
     return this.#request(SyncLogResponseSchema, "GET", "/api/sync/log");
   }
 
+  // ---- posts 查询 -------------------------------------------------------
+
+  async postsList(): Promise<z.infer<typeof PostsListResponseSchema>> {
+    return this.#request(PostsListResponseSchema, "GET", "/api/posts");
+  }
+
   // ---- ai -------------------------------------------------------------
 
   async aiSummary(
@@ -203,6 +211,10 @@ export class HyacineClient {
       req,
       RegisterAssetRequestSchema,
     );
+  }
+
+  async assetsList(): Promise<z.infer<typeof AssetsListResponseSchema>> {
+    return this.#request(AssetsListResponseSchema, "GET", "/api/assets");
   }
 
   // ---- stats -----------------------------------------------------------

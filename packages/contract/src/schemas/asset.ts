@@ -66,3 +66,9 @@ export const RegisterAssetResponseSchema = z.object({
 });
 
 export type RegisterAssetResponse = z.infer<typeof RegisterAssetResponseSchema>;
+
+export const AssetsListResponseSchema = z.object({
+  assets: z.array(AssetIndexEntrySchema),
+});
+
+export type AssetsListResponse = z.infer<typeof AssetsListResponseSchema>;

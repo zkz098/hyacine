@@ -4,6 +4,7 @@ import {
   FrontmatterSchema,
   HashSchema,
   PostIndexEntrySchema,
+  PostListItemSchema,
   PostPathSchema,
   PresignRequestSchema,
   ScopeSchema,
@@ -108,6 +109,21 @@ describe("post index entry", () => {
     expect(categories).toEqual(["随笔"]);
     const parsed = PostIndexEntrySchema.parse(rest);
     expect(parsed.categories).toEqual([]);
+  });
+
+  it("列表项带 ai 状态（缺字段拒绝）", () => {
+    const entry = makePostIndexEntry();
+    const item = {
+      ...entry,
+      ai: {
+        summary: { present: true, model: "m1", at: "2026-01-01T00:00:00.000Z" },
+        embed: { present: false, model: null, at: null },
+      },
+    };
+    expect(PostListItemSchema.safeParse(item).success).toBe(true);
+    expect(
+      PostListItemSchema.safeParse({ ...entry, ai: { summary: { present: true } } }).success,
+    ).toBe(false);
   });
 });
 

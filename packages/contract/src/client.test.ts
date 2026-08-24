@@ -66,6 +66,66 @@ describe("HyacineClient", () => {
     expect(headersOf(calls[0]?.init)).toMatchObject({ authorization: "Bearer tok-123" });
   });
 
+  it("postsList 走 GET /api/posts 并渲染列表项", async () => {
+    const now = new Date().toISOString();
+    const { fetchMock, calls } = makeFetchMock(() =>
+      jsonResponse(200, {
+        posts: [
+          {
+            path: "p.md",
+            slug: "p",
+            title: "P",
+            draft: false,
+            categories: [],
+            hash: "a".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            ai: {
+              summary: { present: true, model: "m", at: now },
+              embed: { present: false, model: null, at: null },
+            },
+          },
+        ],
+      }),
+    );
+    const client = new HyacineClient({
+      baseUrl: "https://api.example.com",
+      token: "t",
+      fetch: fetchMock,
+    });
+
+    const res = await client.postsList();
+    expect(res.posts).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.example.com/api/posts");
+    expect(calls[0]?.init?.method).toBe("GET");
+  });
+
+  it("assetsList 走 GET /api/assets", async () => {
+    const { fetchMock, calls } = makeFetchMock(() =>
+      jsonResponse(200, {
+        assets: [
+          {
+            path: "a.png",
+            isRemote: true,
+            assetType: "image",
+            fileType: "image/png",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const client = new HyacineClient({
+      baseUrl: "https://api.example.com",
+      token: "t",
+      fetch: fetchMock,
+    });
+
+    const res = await client.assetsList();
+    expect(res.assets[0]?.path).toBe("a.png");
+    expect(calls[0]?.url).toBe("https://api.example.com/api/assets");
+  });
+
   it("POST 请求序列化 JSON 请求体并按契约渲染", async () => {
     const { fetchMock, calls } = makeFetchMock(() =>
       jsonResponse(200, {
