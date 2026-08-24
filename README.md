@@ -25,7 +25,17 @@ astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
 - [x] M0 设计定型（/grilling）
 - [x] M2 云端闭环：contract + api + cli（本地/远程/物化）
 - [x] M3 管理台 SPA（apps/console：统计/文章+AI 状态/sync/资产/令牌/设置）
-- [ ] M4 Tauri 桌面壳
+- [x] M4 Tauri 桌面壳（apps/desktop：本地工作台/Milkdown 编辑器/frontmatter 表单/Git 面板/AI 物化，Windows MSVC 构建）
+
+## 桌面（M4）验证
+
+```bash
+# MSVC 链：VS 2026 Community（18/Community）+ WinSDK 10.0.28000
+# cargo 必须经 build.bat（Git Bash 的 link.exe 会遮蔽 MSVC linker）
+cmd /c "scripts\build.bat build --manifest-path apps\desktop\src-tauri\Cargo.toml -p hyacine-desktop"
+# 产物：apps/desktop/src-tauri/target/debug/hyacine-desktop.exe
+# 开发调试：pnpm --filter @hyacine/desktop dev（console dev 端口 5199）
+```
 
 ## 本机验证（M2 验收路径）
 
