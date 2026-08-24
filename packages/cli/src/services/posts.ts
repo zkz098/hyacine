@@ -1,0 +1,176 @@
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, extname, join, relative } from "node:path";
+import matter from "gray-matter";
+import { contentHash } from "../hash";
+import { slugify } from "../slugify";
+import type { PostIndexEntry } from "@hyacine/contract";
+import type { ProjectConfig } from "../config/project";
+
+export function scanPosts(projectRoot: string, config: ProjectConfig): PostIndexEntry[] {
+  const contentDir = join(projectRoot, config.contentDir);
+  if (!existsSync(contentDir)) return [];
+  const files = collectFiles(contentDir, config.postExtension);
+  const entries: PostIndexEntry[] = [];
+  for (const file of files) {
+    const rel = relative(contentDir, file).replace(/\\/g, "/");
+    const raw = readFileSync(file, "utf8");
+    const stat = statSync(file);
+    const parsed = matter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    const title =
+      typeof data.title === "string" && data.title.length > 0
+        ? data.title
+        : basename(file, extname(file));
+    const slugRaw =
+      typeof data.slug === "string" && data.slug.length > 0 ? data.slug : slugify(title);
+    const slug = slugRaw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const draft = data.draft === true;
+    let categories: string[] = [];
+    if (Array.isArray(data.categories))
+      categories = data.categories.filter((x): x is string => typeof x === "string");
+    else if (typeof data.categories === "string" && data.categories.length > 0)
+      categories = [data.categories];
+    const hash = contentHash(raw);
+    const iso = stat.mtime.toISOString();
+    entries.push({
+      path: rel,
+      slug,
+      title,
+      draft,
+      categories,
+      hash,
+      createdAt: iso,
+      updatedAt: iso,
+      lastModified: iso,
+    });
+  }
+  return entries;
+}
+
+function collectFiles(dir: string, extensions: string[]): string[] {
+  const result: string[] = [];
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      result.push(...collectFiles(full, extensions));
+    } else if (entry.isFile()) {
+      const ext = extname(entry.name);
+      if (extensions.includes(ext)) result.push(full);
+    }
+  }
+  return result;
+}
+
+export function findPostByQuery(
+  projectRoot: string,
+  config: ProjectConfig,
+  query: string,
+): string | null {
+  const contentDir = join(projectRoot, config.contentDir);
+  if (!existsSync(contentDir)) return null;
+  const files = collectFiles(contentDir, config.postExtension);
+  const lower = query.toLowerCase();
+  for (const file of files) {
+    const rel = relative(contentDir, file).replace(/\\/g, "/");
+    if (rel.toLowerCase().includes(lower)) return file;
+    const raw = readFileSync(file, "utf8");
+    const parsed = matter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    const title = typeof data.title === "string" ? data.title.toLowerCase() : "";
+    const slug = typeof data.slug === "string" ? data.slug.toLowerCase() : "";
+    if (title.includes(lower) || slug.includes(lower)) return file;
+  }
+  return null;
+}
+
+export function createPost(
+  projectRoot: string,
+  config: ProjectConfig,
+  title: string,
+  categories: string[] = [],
+  draft = true,
+): string {
+  const contentDir = join(projectRoot, config.contentDir);
+  mkdirSync(contentDir, { recursive: true });
+  const slug = slugify(title);
+  const filename = `${slug}.md`;
+  const filePath = join(contentDir, filename);
+  // Avoid overwrite by suffixing
+  let finalPath = filePath;
+  let counter = 1;
+  while (existsSync(finalPath)) {
+    finalPath = join(contentDir, `${slug}-${counter}.md`);
+    counter += 1;
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  const frontmatter: Record<string, unknown> = {
+    title,
+    slug,
+    date,
+    categories: categories.length > 0 ? categories : undefined,
+    draft,
+  };
+  // Remove undefined
+  for (const k of Object.keys(frontmatter)) {
+    if (frontmatter[k] === undefined) delete frontmatter[k];
+  }
+  const content = matter.stringify(`\nWrite your content here.\n`, frontmatter);
+  writeFileSync(finalPath, content, "utf8");
+  return relative(projectRoot, finalPath).replace(/\\/g, "/");
+}
+
+export function renamePost(
+  projectRoot: string,
+  config: ProjectConfig,
+  query: string,
+  newName: string,
+  alsoSlug: boolean,
+): { from: string; to: string } | null {
+  const found = findPostByQuery(projectRoot, config, query);
+  if (found === null) return null;
+  const dir = dirname(found);
+  const ext = extname(found);
+  const newFilename = newName.endsWith(ext) ? newName : `${newName}${ext}`;
+  const dest = join(dir, newFilename);
+  const raw = readFileSync(found, "utf8");
+  let newRaw = raw;
+  if (alsoSlug) {
+    const parsed = matter(raw);
+    const data = parsed.data as Record<string, unknown>;
+    data.slug = slugify(newName.replace(ext, ""));
+    newRaw = matter.stringify(parsed.content, data);
+    writeFileSync(found, newRaw, "utf8");
+  }
+  renameSync(found, dest);
+  return {
+    from: relative(projectRoot, found).replace(/\\/g, "/"),
+    to: relative(projectRoot, dest).replace(/\\/g, "/"),
+  };
+}
+
+export function movePost(
+  projectRoot: string,
+  config: ProjectConfig,
+  query: string,
+  destDir: string,
+): { from: string; to: string } | null {
+  const found = findPostByQuery(projectRoot, config, query);
+  if (found === null) return null;
+  const contentDir = join(projectRoot, config.contentDir);
+  const dest = join(contentDir, destDir, basename(found));
+  mkdirSync(dirname(dest), { recursive: true });
+  renameSync(found, dest);
+  return {
+    from: relative(projectRoot, found).replace(/\\/g, "/"),
+    to: relative(projectRoot, dest).replace(/\\/g, "/"),
+  };
+}
