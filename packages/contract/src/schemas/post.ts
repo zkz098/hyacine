@@ -1,0 +1,51 @@
+import { z } from "zod";
+import {
+  CategoryNameSchema,
+  HashSchema,
+  IsoDateSchema,
+  PostPathSchema,
+  SlugSchema,
+} from "./common";
+
+/** frontmatter 已知键（博客主题允许任意扩展键，故 passthrough） */
+export const FrontmatterSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    slug: SlugSchema.optional(),
+    categories: z.union([CategoryNameSchema, z.array(CategoryNameSchema)]).optional(),
+    tags: z.union([z.string(), z.array(z.string().min(1).max(64))]).optional(),
+    draft: z.boolean().optional(),
+    date: z.string().min(1).optional(),
+    updated: z.string().min(1).optional(),
+    summary: z.string().min(1).max(2000).optional(),
+    summaryModel: z.string().min(1).max(128).optional(),
+    summarySourceHash: HashSchema.optional(),
+    summaryUpdatedAt: IsoDateSchema.optional(),
+    summaryError: z.string().min(1).max(1000).optional(),
+  })
+  .passthrough();
+
+export type Frontmatter = z.infer<typeof FrontmatterSchema>;
+
+/** 同步上行索引条目：CLI 从 frontmatter 提取，API 落 D1 的派生行 */
+export const PostIndexEntrySchema = z.object({
+  path: PostPathSchema,
+  slug: SlugSchema,
+  title: z.string().min(1).max(200),
+  draft: z.boolean(),
+  categories: z.array(CategoryNameSchema).default([]),
+  hash: HashSchema,
+  createdAt: IsoDateSchema,
+  updatedAt: IsoDateSchema,
+  lastModified: IsoDateSchema,
+});
+
+export type PostIndexEntry = z.infer<typeof PostIndexEntrySchema>;
+
+/** 索引条目 + 文件内容：AI 计算时可携带的载荷 */
+export const PostContentSchema = PostIndexEntrySchema.extend({
+  /** 完整 markdown 文本（含 frontmatter），由 server 剥离 frontmatter 后送 AI */
+  content: z.string().min(1),
+});
+
+export type PostContent = z.infer<typeof PostContentSchema>;

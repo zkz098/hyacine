@@ -2,9 +2,8 @@
   "name": "hyacine",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "packageManager": "pnpm@11.22.0",
   "description": "astro-blog-shokax 配套平台：Cloudflare 云端 API + hyc CLI + 管理台/桌面",
+  "type": "module",
   "scripts": {
     "lint": "oxlint --type-aware --type-check . --fix",
     "lint:ci": "oxlint --type-aware --type-check .",
@@ -20,5 +19,6 @@
     "oxfmt": "^0.57.0",
     "oxlint": "^1.72.0",
     "typescript": "^6.0.3"
-  }
+  },
+  "packageManager": "pnpm@11.22.0"
 }

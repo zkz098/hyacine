@@ -4,11 +4,11 @@ astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
 
 ## 组件
 
-| 包 | 说明 | 运行时 |
-|---|---|---|
-| `packages/contract` | zod schemas + 推导类型 + typed client（三端唯一真相） | 纯 TS，零依赖（仅 zod） |
-| `packages/api` | Cloudflare Worker (Hono)：认证、索引 sync、AI 端点、R2 presign | workerd (@cloudflare/workers-types) |
-| `packages/cli` | hyc 续作：本地模式（纯 fs，无状态）+ 远程模式（经 API） | Node ≥ 22 |
+| 包                  | 说明                                                           | 运行时                              |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------- |
+| `packages/contract` | zod schemas + 推导类型 + typed client（三端唯一真相）          | 纯 TS，零依赖（仅 zod）             |
+| `packages/api`      | Cloudflare Worker (Hono)：认证、索引 sync、AI 端点、R2 presign | workerd (@cloudflare/workers-types) |
+| `packages/cli`      | hyc 续作：本地模式（纯 fs，无状态）+ 远程模式（经 API）        | Node ≥ 22                           |
 
 ## 架构决策（/grilling 2026-08-24 定稿）
 
