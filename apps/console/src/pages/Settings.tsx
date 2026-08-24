@@ -1,8 +1,10 @@
-import { createSignal, Show } from "solid-js";
+import { createSignal, Show, onMount } from "solid-js";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
+import { isTauri, gitVersion } from "../tauri/bridge";
+import { projectStore } from "../store/project";
 
 export function Settings(): import("solid-js").JSX.Element {
   const [url, setUrl] = createSignal(apiStore.state.baseUrl);
@@ -17,6 +19,13 @@ export function Settings(): import("solid-js").JSX.Element {
   const [healthLoading, setHealthLoading] = createSignal(false);
 
   const [theme, setThemeSignal] = createSignal(apiStore.state.theme);
+  const [gitVer, setGitVer] = createSignal<string | null>(null);
+
+  onMount(() => {
+    if (isTauri()) {
+      void gitVersion().then((v) => setGitVer(v));
+    }
+  });
 
   const handleSave = (): void => {
     apiStore.setBaseUrl(url().trim());
@@ -141,6 +150,14 @@ export function Settings(): import("solid-js").JSX.Element {
         </button>
         <p class="text-xs text-muted">{t("settings.version")}: 0.1.0</p>
       </div>
+
+      <Show when={isTauri()}>
+        <div class="surface p-4 flex flex-col gap-2">
+          <h2 class="font-semibold text-sm">桌面</h2>
+          <p class="text-xs text-muted">项目目录：{projectStore.projectDir() ?? "未选择"}</p>
+          <p class="text-xs text-muted">Git：{gitVer() ?? "检测中..."}</p>
+        </div>
+      </Show>
     </div>
   );
 }

@@ -8,6 +8,9 @@ import { Sync } from "./pages/Sync";
 import { Assets } from "./pages/Assets";
 import { Tokens } from "./pages/Tokens";
 import { Settings } from "./pages/Settings";
+import { Workspace } from "./pages/Workspace";
+import { Editor } from "./pages/Editor";
+import { Git } from "./pages/Git";
 import { apiStore } from "./store/api";
 
 function Guarded(props: { children: JSX.Element }): JSX.Element | null {
@@ -76,6 +79,30 @@ export function App(): JSX.Element {
         component={() => (
           <LayoutGuarded>
             <Settings />
+          </LayoutGuarded>
+        )}
+      />
+      <Route
+        path="/workspace"
+        component={() => (
+          <LayoutGuarded>
+            <Workspace />
+          </LayoutGuarded>
+        )}
+      />
+      <Route
+        path="/editor"
+        component={() => (
+          <LayoutGuarded>
+            <Editor />
+          </LayoutGuarded>
+        )}
+      />
+      <Route
+        path="/git"
+        component={() => (
+          <LayoutGuarded>
+            <Git />
           </LayoutGuarded>
         )}
       />

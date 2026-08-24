@@ -6,6 +6,6 @@ export default defineConfig({
   base: "./",
   plugins: [solid(), UnoCSS()],
   server: {
-    port: 5173,
+    port: 5199,
   },
 });

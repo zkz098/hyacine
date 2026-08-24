@@ -2,14 +2,21 @@ import { createSignal, type JSX } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
+import { isTauri } from "../tauri/bridge";
 
-const navItems = [
+const baseNavItems = [
   { href: "/", label: "nav.dashboard", icon: "i-ri-dashboard-line" },
   { href: "/posts", label: "nav.posts", icon: "i-ri-article-line" },
   { href: "/sync", label: "nav.sync", icon: "i-ri-refresh-line" },
   { href: "/assets", label: "nav.assets", icon: "i-ri-image-line" },
   { href: "/tokens", label: "nav.tokens", icon: "i-ri-key-2-line" },
   { href: "/settings", label: "nav.settings", icon: "i-ri-settings-3-line" },
+] as const;
+
+const desktopNavItems = [
+  { href: "/workspace", label: "workspace.title", icon: "i-ri-hard-drive-2-line" },
+  { href: "/editor", label: "editor.title", icon: "i-ri-quill-pen-line" },
+  { href: "/git", label: "git.title", icon: "i-ri-git-branch-line" },
 ] as const;
 
 export function AppLayout(props: { children: JSX.Element }): JSX.Element {
@@ -40,7 +47,7 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
           hyacine
         </div>
         <nav class="flex-1 p-2 flex flex-col gap-1">
-          {navItems.map((item) => (
+          {baseNavItems.map((item) => (
             <A
               href={item.href}
               end={item.href === "/"}
@@ -52,6 +59,22 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
               {t(item.label)}
             </A>
           ))}
+          {isTauri() && (
+            <>
+              <div class="my-1 border-t border-[var(--border)]" />
+              {desktopNavItems.map((item) => (
+                <A
+                  href={item.href}
+                  class="flex items-center gap-2 px-3 py-2 rounded text-sm text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--text)]"
+                  activeClass="bg-[var(--bg)] text-[var(--text)] font-medium"
+                  onClick={() => setOpen(false)}
+                >
+                  <span class={item.icon} />
+                  {t(item.label)}
+                </A>
+              ))}
+            </>
+          )}
         </nav>
         <div class="p-3 border-t border-[var(--border)]">
           <button

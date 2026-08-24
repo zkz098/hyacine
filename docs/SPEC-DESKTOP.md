@@ -30,6 +30,7 @@
 ## console 桌面特性（apps/console/src，全部 isTauri 守卫）
 
 ### 桥接与守卫
+
 - `src/tauri/bridge.ts`：
   - `isTauri(): boolean` —— `window.__TAURI_INTERNALS__ !== undefined`。
   - 惰性导出：`openFolderDialog()`、`readTextFile(p)`、`writeTextFile(p, c)`、`listDir(p)`（递归 + 过滤）、`gitExec(args)`（shell execute，返回 {stdout,stderr,code}）——**全部 `await import("@tauri-apps/plugin-*")` 于函数内部**，WebUI 永远不触发。
@@ -37,14 +38,17 @@
 - 桌面检测在 store：`desktopMode = isTauri()`（启动时判定一次，session 内不变）。
 
 ### frontmatter 工具（console 侧，浏览器/WebView 安全）
+
 - `src/lib/frontmatter.ts`：gray-matter + yaml core schema engine（**与 CLI 完全同款自定义 engine**：`{schema:"core"}` 保 date 字符串不被重写成 ISO；parse 用 typeof 守卫收 object）。函数：parseFrontmatter / stringifyFrontmatter / materializeSummary（四键：summary/summaryModel/summarySourceHash/summaryUpdatedAt）/ hasUpToDateSummary。新增 console deps：`gray-matter`、`yaml`。
 - `src/lib/postHash.ts`：`postBodyHash(raw)`（sha256-16 over 正文，**先剥 frontmatter**——复用 M2 教训：hash 只覆盖正文，物化不改变 hash）。
 
 ### 项目与本地文章 store
+
 - `src/store/project.ts`（desktopMode only）：`projectDir`、`config`（读取 `<dir>/hyacine.yml` 解析 contentDir/assetsDir，缺省 src/posts/src/assets；无 hyacine.yml 也允许，报一次提示）、`postInfos`（递归扫 contentDir 的 .md/.mdx：`{path, title, slug, draft, categories, hash, summaryPresent, updatedAt}`，frontmatter+hash 解析）、`newPost(title)`（模板脚手架）、`openInEditor(path)`（存 current path 供 /editor）。
 - 动作即存即写（无自动保存节流 v0；保存按钮 + Ctrl+S 快捷键）。
 
 ### 页面（仅 desktopMode 显示于导航）
+
 - `/workspace` 工作台：空态（项目未选）→「选择博客目录」联 dialogs.open({directory:true})；选中后显示项目路径 + 文章列表（标题/草稿徽标/摘要存在✓/更新时间）+ 新建按钮 + 每行「编辑」。
 - `/editor?path=...` 编辑器：
   - 左：frontmatter 结构化表单（title/slug/categories(逗号分隔 string)/tags/draft 开关/date）；右/下：Milkdown WYSIWYG 正文。
@@ -53,15 +57,18 @@
 - `/settings` 增补桌面项：当前项目目录 + 重新选择；本机 Git 可用性探测（git --version）；其余沿用。
 
 ### Milkdown 集成（SolidJS 手动挂载）
+
 - deps：`@milkdown/core`、`@milkdown/preset-commonmark`、`@milkdown/plugin-history`、`@milkdown/plugin-listener`、`@milkdown/theme-nord`（或 choose 风格接近者）——**全部同一 exact 版本**（安装时确认 resolved 版本一致，不匹配必报错）。
 - `src/components/MilkdownEditor.tsx`：Props { initialMarkdown, onChange(getMarkdown) }；ref div；onMount 创建 `Editor.make().config(themeNord).use(commonmark).use(history).use(listenerMarkdown(update → onChange))`；onCleanup `editor.destroy()`；`setMarkdown/getMarkdown` 经 useImperativeHandle 等价物（Solid 用 ref prop callback）暴露。
 - **仅 /editor 页面 import**（动态或静态均可，但页面组件惰性加载 route）；WebUI 无该路由触发 → 构建产物可能仍含 chunk（可接受），但**运行时不 import**。
 
 ### i18n 与主题
+
 - 扩展现有 `src/i18n/index.ts`：新增键（工作台/编辑器/保存/新建/提交/推送/AI摘要/选择博客目录/Git 等），en 空壳同步占位。
 - 主题沿用 console 现有 CSS 变量体系。
 
 ### 测试
+
 - vitest（jsdom）：bridge 降级（非 tauri 抛 require_tauri）、frontmatter core schema（date 字符串保真）、postBodyHash（物化不影响 hash）、project store（注入 fake bridge：内存文件树）、materialize 流程（mock client fetch）。
 - Milkdown 不单测（thin wrapper + 手工验证）。
 - 桌面页面组件测试 2-3 个（Workplace 空态/列表，mock bridge）。

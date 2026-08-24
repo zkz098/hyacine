@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capabilities/default.json",
+  "identifier": "default",
+  "description": "default capabilities for hyacine desktop (v0 scope: $HOME/**)",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-set-title",
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "shell:default",
+    "shell:allow-execute"
+  ]
+}

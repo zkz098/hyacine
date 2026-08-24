@@ -12,3 +12,4 @@ coverage/
 .DS_Store
 target/
 .dev.vars
+apps/desktop/src-tauri/gen/
