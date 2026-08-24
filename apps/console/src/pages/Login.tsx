@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
+import { isTauri } from "../tauri/bridge";
 
 export function Login(): import("solid-js").JSX.Element {
   const navigate = useNavigate();
@@ -68,6 +69,15 @@ export function Login(): import("solid-js").JSX.Element {
         >
           {loading() ? "..." : t("login.submit")}
         </button>
+        {isTauri() && (
+          <button
+            type="button"
+            onClick={() => navigate("/workspace")}
+            class="w-full py-2 rounded border border-[var(--border)] text-sm text-[var(--muted)] hover:text-[var(--text)]"
+          >
+            {t("login.skipLocal")}
+          </button>
+        )}
       </div>
     </div>
   );

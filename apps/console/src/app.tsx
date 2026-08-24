@@ -12,8 +12,14 @@ import { Workspace } from "./pages/Workspace";
 import { Editor } from "./pages/Editor";
 import { Git } from "./pages/Git";
 import { apiStore } from "./store/api";
+import { isTauri } from "./tauri/bridge";
 
-function Guarded(props: { children: JSX.Element }): JSX.Element | null {
+export interface GuardProps {
+  children: JSX.Element;
+}
+
+/** 云平面守卫：需要 API 登录（dashboard/posts/sync/assets/tokens） */
+export function CloudGuarded(props: GuardProps): JSX.Element | null {
   const navigate = useNavigate();
   if (!apiStore.isAuthed()) {
     navigate("/login");
@@ -24,9 +30,45 @@ function Guarded(props: { children: JSX.Element }): JSX.Element | null {
 
 function LayoutGuarded(props: { children: JSX.Element }): JSX.Element {
   return (
-    <Guarded>
+    <CloudGuarded>
       <AppLayout>{props.children}</AppLayout>
-    </Guarded>
+    </CloudGuarded>
+  );
+}
+
+/** 本地（桌面）平面守卫：isTauri 即可用，无需 API 登录（workspace/editor/git） */
+export function LocalGuarded(props: GuardProps): JSX.Element | null {
+  const navigate = useNavigate();
+  if (!isTauri()) {
+    navigate("/login");
+    return null;
+  }
+  return <>{props.children}</>;
+}
+
+function LocalLayoutGuarded(props: { children: JSX.Element }): JSX.Element {
+  return (
+    <LocalGuarded>
+      <AppLayout>{props.children}</AppLayout>
+    </LocalGuarded>
+  );
+}
+
+/** 环境感知守卫：设置页——桌面离线可用（选目录/配 API），Web 需登录 */
+export function EnvGuarded(props: GuardProps): JSX.Element | null {
+  const navigate = useNavigate();
+  if (!apiStore.isAuthed() && !isTauri()) {
+    navigate("/login");
+    return null;
+  }
+  return <>{props.children}</>;
+}
+
+function EnvLayoutGuarded(props: { children: JSX.Element }): JSX.Element {
+  return (
+    <EnvGuarded>
+      <AppLayout>{props.children}</AppLayout>
+    </EnvGuarded>
   );
 }
 
@@ -77,33 +119,33 @@ export function App(): JSX.Element {
       <Route
         path="/settings"
         component={() => (
-          <LayoutGuarded>
+          <EnvLayoutGuarded>
             <Settings />
-          </LayoutGuarded>
+          </EnvLayoutGuarded>
         )}
       />
       <Route
         path="/workspace"
         component={() => (
-          <LayoutGuarded>
+          <LocalLayoutGuarded>
             <Workspace />
-          </LayoutGuarded>
+          </LocalLayoutGuarded>
         )}
       />
       <Route
         path="/editor"
         component={() => (
-          <LayoutGuarded>
+          <LocalLayoutGuarded>
             <Editor />
-          </LayoutGuarded>
+          </LocalLayoutGuarded>
         )}
       />
       <Route
         path="/git"
         component={() => (
-          <LayoutGuarded>
+          <LocalLayoutGuarded>
             <Git />
-          </LayoutGuarded>
+          </LocalLayoutGuarded>
         )}
       />
     </HashRouter>

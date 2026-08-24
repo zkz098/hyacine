@@ -110,10 +110,21 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
             <span class="i-ri-menu-line text-xl" />
           </button>
           <div class="flex items-center gap-2 ml-auto">
-            <span
-              class={`w-2 h-2 rounded-full ${apiStore.isAuthed() ? "bg-[var(--ok)]" : "bg-[var(--danger)]"}`}
-              title={apiStore.isAuthed() ? "已登录" : "未登录"}
-            />
+            {isTauri() && !apiStore.isAuthed() ? (
+              <span class="text-xs px-2 py-0.5 rounded-full border border-[var(--border)] text-[var(--muted)]">
+                {t("mode.local")}
+              </span>
+            ) : (
+              <span
+                class={`text-xs px-2 py-0.5 rounded-full border ${
+                  apiStore.isAuthed()
+                    ? "border-[var(--ok)] text-[var(--ok)]"
+                    : "border-[var(--danger)] text-[var(--danger)]"
+                }`}
+              >
+                {t(apiStore.isAuthed() ? "mode.cloud" : "mode.disconnected")}
+              </span>
+            )}
             <button
               type="button"
               onClick={toggleTheme}
