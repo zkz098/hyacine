@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { HyacineClient } from "@hyacine/contract";
 import { materializeSummary } from "./frontmatter";
-import { contentHash } from "./hash";
+import { postBodyHash } from "./hash";
 
 function mockFetchForSummary(expectedSummary: string): typeof fetch {
   const fn = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -37,7 +37,7 @@ describe("ai materialize via mock client", () => {
     const file = join(tmp, "post.md");
     const raw = `---\ntitle: Hello\n---\n\nBody content here.\n`;
     writeFileSync(file, raw, "utf8");
-    const hash = contentHash(raw);
+    const hash = postBodyHash(raw);
     const client = new HyacineClient({
       baseUrl: "https://api.example.com",
       token: "tok",
@@ -61,7 +61,7 @@ describe("ai materialize via mock client", () => {
 
   it("materialize is idempotent when hash matches", () => {
     const raw = `---\ntitle: T\n---\n\nX\n`;
-    const hash = contentHash(raw);
+    const hash = postBodyHash(raw);
     const once = materializeSummary(raw, "s", "m", hash, new Date().toISOString());
     const twice = materializeSummary(once, "s", "m", hash, new Date().toISOString());
     expect(twice).toContain("summary: s");

@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { basename, dirname, extname, join, relative } from "node:path";
 import matter from "gray-matter";
-import { contentHash } from "../hash";
+import { postBodyHash } from "../hash";
 import { slugify } from "../slugify";
 import type { PostIndexEntry } from "@hyacine/contract";
 import type { ProjectConfig } from "../config/project";
@@ -38,7 +38,7 @@ export function scanPosts(projectRoot: string, config: ProjectConfig): PostIndex
       categories = data.categories.filter((x): x is string => typeof x === "string");
     else if (typeof data.categories === "string" && data.categories.length > 0)
       categories = [data.categories];
-    const hash = contentHash(raw);
+    const hash = postBodyHash(raw);
     const iso = stat.mtime.toISOString();
     entries.push({
       path: rel,

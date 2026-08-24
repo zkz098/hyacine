@@ -41,4 +41,11 @@ describe("frontmatter", () => {
     expect(out).toContain("custom: 123");
     expect(out).toContain("categories:");
   });
+
+  it("日期字符串不被重写为 ISO 时间戳（core schema 保真）", () => {
+    const raw = `---\ntitle: T\ndate: 2026-08-01\n---\n\nX\n`;
+    const out = materializeSummary(raw, "s", "m", "a".repeat(16), "2026-01-01T00:00:00.000Z");
+    expect(out).toContain("date: 2026-08-01");
+    expect(out).not.toContain("2026-08-01T00:00:00");
+  });
 });

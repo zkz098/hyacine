@@ -23,9 +23,29 @@ astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
 ## 里程碑
 
 - [x] M0 设计定型（/grilling）
-- [ ] M2 云端闭环：contract + api + cli（本地/远程/物化）
+- [x] M2 云端闭环：contract + api + cli（本地/远程/物化）
 - [ ] M3 管理台 SPA（SolidJS + UnoCSS + RemixIcon + Milkdown）
 - [ ] M4 Tauri 桌面壳
+
+## 本机验证（M2 验收路径）
+
+```bash
+# API（本地 miniflare，无需 CF 账号）
+cd packages/api
+cp .dev.vars.example .dev.vars   # 填 SETUP_CODE / AI 端点
+pnpm exec wrangler d1 migrations apply DB --local
+node scripts/smoke.mjs            # health→setup→sync→presign 全链
+
+# CLI 端到端（需要另一个终端跑 wrangler dev --local）
+cd packages/cli && pnpm run build
+cd <博客项目>
+hyc list                                 # 本地模式：纯文件
+hyc login --url http://127.0.0.1:8787 --code <SETUP_CODE>
+hyc sync && hyc ai:summary --all          # 索引上行 + 摘录物化回 frontmatter
+```
+
+> 本地 miniflare 的 Workers AI binding（embed）不可用，ai:embed / ai:similar 需远程环境；
+> BYOK 摘要（OpenAI 兼容端点）本地可跑通（把 AI_SUMMARY_ENDPOINT 指向自建 stub）。
 
 ## 开发
 
