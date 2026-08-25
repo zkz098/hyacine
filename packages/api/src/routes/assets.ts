@@ -34,7 +34,7 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       bucket === undefined ||
       bucket.length === 0
     ) {
-      return c.json(errorBody("ai_not_configured", "未配置 R2 S3 凭据"), 503);
+      return c.json(errorBody("r2_not_configured", "未配置 R2 S3 凭据"), 503);
     }
 
     const expiresSeconds = 300;

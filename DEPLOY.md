@@ -12,8 +12,8 @@
 ┌─────────────────────┐      ┌──────────────────────────────┐
 │ 本地（桌面 / CLI）    │ sync │  Cloudflare Worker (hyacine-api)│
 │  - markdown/mdx 原文 │ ───► │  - D1  hyacine（索引/用量/日志）│
-│  - presign 直传 R2   │ ◄─── │  - KV  CACHE（AI 摘要缓存）      │
-│  - git commit/push   │      │  - R2  hyacine-assets（图片等）  │
+│  - presign 直传 R2*  │ ◄─── │  - KV  CACHE（AI 摘要缓存）      │
+│  - git commit/push   │      │  - R2* hyacine-assets（图片等）  │
 └─────────────────────┘      │  - Workers AI（嵌入 bge-m3）      │
         │ push                └──────────────────────────────┘
         ▼
@@ -22,7 +22,8 @@
 
 - **云平面**：管理台/CLI 经 HTTP API 读索引、看 AI 状态、管理 token、统计。
 - **本地平面（桌面离线）**：直接读写博客目录文件，不依赖 API。
-- **内容流向**：本地编辑 → `sync` 全量上行（按 hash diff）→ 服务端返回 `ai.needs` → 按需跑 AI 摘要/嵌入 → 资产 presign 直传 R2 → 本地 `git push` 触发博客构建。
+- **内容流向**：本地编辑 → `sync` 全量上行（按 hash diff）→ 服务端返回 `ai.needs` → 按需跑 AI 摘要/嵌入 → 资产 presign 直传 R2（可选）→ 本地 `git push` 触发博客构建。
+- \* **R2 为可选能力**：不配置 R2 凭据/绑定即可正常部署与使用，仅 `/api/assets/presign` 返回 503 `r2_not_configured`，其余接口不受影响。
 
 ---
 
@@ -60,8 +61,8 @@ pnpm install
 binding = "DB"
 [[kv_namespaces]]
 binding = "CACHE"
-[[r2_buckets]]
-binding = "ASSETS"
+# [[r2_buckets]]   # 可选：不需要资产直传 R2 可省略
+# binding = "ASSETS"
 ```
 
 然后直接 `wrangler dev`（本地自动建本地资源）和 `wrangler deploy`——云端资源会以 worker 名前缀自动创建，**id 自动回写进 wrangler.toml**（若从 GitHub/dashboard 部署，id 只存在 dashboard，不会回写仓库，用方案 B 查看）。
@@ -87,7 +88,7 @@ wrangler d1 create hyacine
 wrangler kv namespace create CACHE
 # → 输出 id，粘贴到 [[kv_namespaces]] id
 
-# 3) R2 桶
+# 3) R2 桶（可选：不需要资产直传 R2 可跳过）
 wrangler r2 bucket create hyacine-assets
 ```
 
@@ -99,6 +100,7 @@ wrangler r2 bucket create hyacine-assets
 wrangler secret put SETUP_CODE            # 首次安装码，≥8 位强随机
 wrangler secret put AI_SUMMARY_ENDPOINT   # OpenAI 兼容端点，如 https://api.openai.com/v1/chat/completions
 wrangler secret put AI_SUMMARY_KEY        # 对应 API Key
+# 以下 R2 凭据为可选（资产直传 R2 时才需要）：
 wrangler secret put R2_S3_ENDPOINT        # https://<account_id>.r2.cloudflarestorage.com
 wrangler secret put R2_ACCESS_KEY_ID
 wrangler secret put R2_SECRET_ACCESS_KEY
@@ -108,7 +110,7 @@ wrangler secret put R2_SECRET_ACCESS_KEY
 
 ```bash
 wrangler secret put AI_SUMMARY_MODEL      # 如 gpt-4o-mini
-wrangler secret put R2_BUCKET             # hyacine-assets
+wrangler secret put R2_BUCKET             # hyacine-assets（可选）
 wrangler secret put EMBED_MODEL           # 默认 @cf/baai/bge-m3
 ```
 
@@ -283,7 +285,7 @@ hyc sync
 hyc ai:summary    # 摘要（写回 frontmatter summary* 键，hash 不变）
 hyc ai:embed      # 嵌入（存 D1）
 
-# 4) 资产直传 R2（图片等）
+# 4) 资产直传 R2（图片等，可选：未配 R2 时 presign 返回 503，跳过即可）
 #    桌面 Assets 页 presign 直传；CLI 侧走同步登记
 
 # 5) 提交并推送博客仓库（触发线上构建）

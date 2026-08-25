@@ -24,7 +24,7 @@
   - `main = "src/index.ts"`
   - `[[d1_databases]] binding = "DB" database_name = "hyacine" database_id = "local"`（本地 miniflare 直接可用；远程部署时用户替换 real id）
   - `[[kv_namespaces]] binding = "CACHE" id = "local"`
-  - `[[r2_buckets]] binding = "ASSETS" bucket_name = "hyacine-assets"`
+  - `[[r2_buckets]] binding = "ASSETS" bucket_name = "hyacine-assets"`（**可选**，不需要资产直传 R2 可省略；省略后 presign 返回 503）
   - `[ai] binding = "AI"`（Workers AI，本地开发在 test/smoke 中 mock）
   - `compatibility_date` 用当周值，`compatibility_flags` 不需要额外。
 - `wrangler.jsonc` 不需要，保持 toml 单配置。
@@ -94,9 +94,9 @@ CREATE TABLE sync_logs (
 | `AI_SUMMARY_ENDPOINT`                       | OpenAI 兼容 chat completions URL（BYOK）                                                  |
 | `AI_SUMMARY_KEY`                            | 用户自持 key                                                                              |
 | `AI_SUMMARY_MODEL`                          | 模型名                                                                                    |
-| `R2_S3_ENDPOINT`                            | `https://<account>.r2.cloudflarestorage.com`                                              |
-| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 S3 API 凭据（presign 用）                                                              |
-| `R2_BUCKET`                                 | R2 bucket 名                                                                              |
+| `R2_S3_ENDPOINT`                            | `https://<account>.r2.cloudflarestorage.com`（**可选**：资产直传 R2 才需配置）                                |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | R2 S3 API 凭据（presign 用，可选）                                              |
+| `R2_BUCKET`                                 | R2 bucket 名（可选）                                                                              |
 | `EMBED_MODEL`                               | 默认 `@cf/baai/bge-m3`（多语言，dim 1024）；换模型=旧向量作废（ai_results 按 model 区分） |
 
 AI 配置探测 → health：`AI_SUMMARY_ENDPOINT && AI_SUMMARY_KEY && AI_SUMMARY_MODEL` 齐 = summary:true；`EMBED_MODEL` + AI binding = embed:true。
@@ -119,11 +119,11 @@ AI 配置探测 → health：`AI_SUMMARY_ENDPOINT && AI_SUMMARY_KEY && AI_SUMMAR
 | POST /api/ai/embed               | 调 `env.AI.run(EMBED_MODEL, { text: chunks })` → `{data:[{embedding:number[]}]}`；mean 池化为文档向量；写 ai*results（embed*\* 列）；响应只回 {hash, model, dim, chunkCount}（不回向量）                                                                                                                                                                                        | ai                  |
 | POST /api/ai/similar             | 查 query hash 的 embed_vec；全表扫有向量的行（排除自身）cosine 排序 top-k；返回 items（path/slug/title/score，score∈[-1,1]）；无向量可达 → 404 `embedding_missing`                                                                                                                                                                                                              | ai                  |
 | POST /api/ai/status              | 批量 hashes → 每行 summary/embed present+model+at                                                                                                                                                                                                                                                                                                                               | ai                  |
-| POST /api/assets/presign         | aws4fetch SigV4(PUT) 到 `${R2_S3_ENDPOINT}/${R2_BUCKET}/${key}`，过期 300s；返回 {key,url,method:'PUT',headers,expiresAt}；key 复用请求 key（R2 对象路径即 key，前缀可加 `remote/`）                                                                                                                                                                                            | posts.w             |
+| POST /api/assets/presign         | aws4fetch SigV4(PUT) 到 `${R2_S3_ENDPOINT}/${R2_BUCKET}/${key}`，过期 300s；返回 {key,url,method:'PUT',headers,expiresAt}；key 复用请求 key（R2 对象路径即 key，前缀可加 `remote/`）；未配置 R2 凭据 → 503 `r2_not_configured`（R2 可选，无需可不配置） | posts.w             |
 | POST /api/assets/register        | upsert assets 行（is_remote=true, r2_key, checksum?, size?）                                                                                                                                                                                                                                                                                                                    | posts.w             |
 | GET /api/stats                   | totals/byCategory（JSON 解析累加）/byMonth（created_at 前 7 字符）/assets(remote 计数)                                                                                                                                                                                                                                                                                          | posts.r             |
 
-错误信封统一 `{error:{code,message,details?}}`。code 建议：`unauthorized`(401) / `forbidden`(403) / `setup_required`(400) / `invalid_code`(401) / `validation_error`(400) / `not_found`(404) / `conflict`(409) / `ai_failed`(502) / `ai_not_configured`(503) / `embedding_failed`(502) / `embedding_missing`(404) / `payload_too_large`(413)。
+错误信封统一 `{error:{code,message,details?}}`。code 建议：`unauthorized`(401) / `forbidden`(403) / `setup_required`(400) / `invalid_code`(401) / `validation_error`(400) / `not_found`(404) / `conflict`(409) / `ai_failed`(502) / `ai_not_configured`(503) / `r2_not_configured`(503) / `embedding_failed`(502) / `embedding_missing`(404) / `payload_too_large`(413)。
 
 KV（CACHE）用途：`ai:{hash}:{model}` 摘要缓存（TTL 7d，D1 为准，KV 只做加速）、`limiter:{ip}`（简单计数，v0 可省）。不要过度设计。
 

@@ -1,7 +1,7 @@
 export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
-  ASSETS: R2Bucket;
+  ASSETS?: R2Bucket;
   AI: Ai;
   SETUP_CODE?: string;
   AI_SUMMARY_ENDPOINT?: string;
