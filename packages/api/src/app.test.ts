@@ -1217,3 +1217,81 @@ describe("Primary 模式（远程编辑 / 导出）", () => {
     expect(((await res.json()) as { dispatched: boolean }).dispatched).toBe(false);
   });
 });
+
+describe("manual ai generate", () => {
+  it("POST /api/ai/generate 为带正文文章同步生成 summary+embed（workers-ai）", async () => {
+    const env = createTestEnv({
+      AI: {
+        run: async (model: unknown) => {
+          const m = String(model);
+          if (m.includes("bge")) return { data: [[0.1, 0.2]] };
+          return { response: "这是立刻生成的摘要。" };
+        },
+      } as unknown as Env["AI"],
+    });
+    const db = getFakeD1(env);
+    db.appConfig.set("aiSummary.provider", "workers-ai");
+    const token = await setupAdminToken(env);
+    const content = `---\ntitle: Gen\n---\n\nHello gen body.`;
+    await request(env, "POST", "/api/posts", { path: "gen.md", content }, token);
+    const res = await request(
+      env,
+      "POST",
+      "/api/ai/generate",
+      { path: "gen.md", kinds: ["summary", "embed"] },
+      token,
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      hash: string;
+      summary: { present: boolean };
+      embed: { present: boolean };
+      errors: string[];
+    };
+    expect(json.summary.present).toBe(true);
+    expect(json.embed.present).toBe(true);
+    expect(json.errors).toEqual([]);
+  });
+
+  it("POST /api/ai/generate 无正文 → 404", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const res = await request(
+      env,
+      "POST",
+      "/api/ai/generate",
+      { path: "nope.md", kinds: ["summary"] },
+      token,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /api/ai/generate BYOK 未配置端点 → errors 返回但状态 200", async () => {
+    const env = createTestEnv();
+    const db = getFakeD1(env);
+    const token = await setupAdminToken(env);
+    db.posts.set("gen.md", {
+      path: "gen.md",
+      slug: "gen",
+      title: "Gen",
+      draft: 0,
+      categories: "[]",
+      hash: "g".repeat(16),
+      created_at: "2026-08-01T00:00:00.000Z",
+      updated_at: "2026-08-01T00:00:00.000Z",
+      last_modified: "2026-08-01T00:00:00.000Z",
+      content: "---\ntitle: Gen\n---\n\nBody.",
+    });
+    const res = await request(
+      env,
+      "POST",
+      "/api/ai/generate",
+      { path: "gen.md", kinds: ["summary"] },
+      token,
+    );
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { errors: string[]; summary: { present: boolean } };
+    expect(json.errors.length).toBeGreaterThan(0);
+    expect(json.summary.present).toBe(false);
+  });
+});

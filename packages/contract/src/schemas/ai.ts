@@ -1,6 +1,31 @@
 import { z } from "zod";
 import { HashSchema, IsoDateSchema, PostPathSchema, SlugSchema } from "./common";
 
+/** 手动「立刻生成摘要/嵌入」：按 post 路径，kinds 默认两者 */
+export const AiGenerateRequestSchema = z.object({
+  path: z.string().min(1).max(1024),
+  kinds: z.array(z.enum(["summary", "embed"])).default(["summary", "embed"]),
+});
+
+export type AiGenerateRequest = z.infer<typeof AiGenerateRequestSchema>;
+
+export const AiGenerateResponseSchema = z.object({
+  hash: HashSchema,
+  summary: z.object({
+    present: z.boolean(),
+    model: z.string().nullable(),
+    at: IsoDateSchema.nullable(),
+  }),
+  embed: z.object({
+    present: z.boolean(),
+    model: z.string().nullable(),
+    at: IsoDateSchema.nullable(),
+  }),
+  errors: z.array(z.string()).default([]),
+});
+
+export type AiGenerateResponse = z.infer<typeof AiGenerateResponseSchema>;
+
 /** 摘要请求：client 传全文，server 剥离 frontmatter 后送 BYOK 端点 */
 export const SummaryRequestSchema = z.object({
   hash: HashSchema,

@@ -20,6 +20,37 @@ export function Posts(): import("solid-js").JSX.Element {
   const [editError, setEditError] = createSignal<string | null>(null);
   const [editResult, setEditResult] = createSignal<string | null>(null);
 
+  // 立刻生成摘要/嵌入
+  const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
+  const [genMsg, setGenMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const handleGenerateAi = async (post: { path: string; title: string }): Promise<void> => {
+    setGeneratingPath(post.path);
+    setGenMsg(null);
+    try {
+      const res = await apiStore
+        .getClient()
+        .generateAi({ path: post.path, kinds: ["summary", "embed"] });
+      const parts = [
+        `${t("posts.ai.summary")}: ${res.summary.present ? t("posts.ai.present") : "—"}`,
+        `${t("posts.ai.embed")}: ${res.embed.present ? t("posts.ai.present") : "—"}`,
+      ];
+      if (res.errors.length > 0) {
+        setGenMsg({
+          kind: "err",
+          text: `${post.title} → ${parts.join(" · ")}；${res.errors.join("；")}`,
+        });
+      } else {
+        setGenMsg({ kind: "ok", text: `${post.title} → ${parts.join(" · ")}` });
+      }
+      await refetch();
+    } catch (err: unknown) {
+      setGenMsg({ kind: "err", text: `${post.title}：${messageOf(err)}` });
+    } finally {
+      setGeneratingPath(null);
+    }
+  };
+
   const openEdit = async (path: string): Promise<void> => {
     setEditingPath(path);
     setEditError(null);
@@ -88,6 +119,10 @@ export function Posts(): import("solid-js").JSX.Element {
 
       <Show when={posts.error}>
         <Alert variant="error">{messageOf(posts.error)}</Alert>
+      </Show>
+
+      <Show when={genMsg()}>
+        {(m) => <Alert variant={m().kind === "ok" ? "success" : "warning"}>{m().text}</Alert>}
       </Show>
 
       <Show when={posts.loading}>
@@ -168,8 +203,19 @@ export function Posts(): import("solid-js").JSX.Element {
                         <td class="px-3 py-2">
                           <button
                             type="button"
+                            disabled={generatingPath() !== null}
+                            onClick={() => void handleGenerateAi(post)}
+                            title="立刻生成摘要与嵌入"
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] disabled:opacity-50"
+                          >
+                            {generatingPath() === post.path
+                              ? t("posts.ai.generating")
+                              : t("posts.ai.generate")}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => void openEdit(post.path)}
-                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)]"
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] ml-1"
                           >
                             {t("posts.editRemote")}
                           </button>

@@ -1,6 +1,7 @@
 // oxlint-disable typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion, eslint/no-await-in-loop
 import { Hono } from "hono";
 import {
+  AiGenerateRequestSchema,
   AiStatusRequestSchema,
   EmbedRequestSchema,
   SimilarRequestSchema,
@@ -10,11 +11,118 @@ import { cosine, meanPool, stripFrontmatter } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
 import { defer } from "../utils/defer";
 import { loadEffectiveConfig } from "../utils/config";
-import { generateSummaryByok, generateSummaryWorkersAi } from "../utils/aiQueue";
+import {
+  chunkText,
+  EMBED_DEFAULT_MODEL,
+  generateSummaryByok,
+  generateSummaryWorkersAi,
+  generateEmbed,
+  storeEmbedResult,
+  storeSummaryResult,
+} from "../utils/aiQueue";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
 export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
+  // 手动「立刻生成摘要/嵌入」：按 post 路径即时而同步生成（绕过队列，供管理台按钮）
+  app.post("/api/ai/generate", authMiddleware(["ai"]), async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = AiGenerateRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+    }
+    const { path, kinds } = parsed.data;
+    const row = await c.env.DB.prepare("SELECT hash, content FROM posts WHERE path = ?")
+      .bind(path)
+      .first<{ hash: string; content: string | null }>();
+    if (row === null || row === undefined || row.content === null) {
+      return c.json(errorBody("not_found", "文章无正文（请先同步/上传正文到 D1）"), 404);
+    }
+
+    const cfg = await loadEffectiveConfig(c.env);
+    const summaryModel = cfg.aiSummary.model.length > 0 ? cfg.aiSummary.model : "";
+    const embedModel = cfg.embedModel.length > 0 ? cfg.embedModel : EMBED_DEFAULT_MODEL;
+    const errors: string[] = [];
+    const now = new Date();
+    const stripped = stripFrontmatter(row.content);
+
+    if (kinds.includes("summary")) {
+      try {
+        if (cfg.aiSummary.provider === "workers-ai") {
+          const summary = await generateSummaryWorkersAi(
+            c.env,
+            summaryModel || "@cf/meta/llama-3.2-3b-instruct",
+            stripped,
+          );
+          await storeSummaryResult(
+            c.env,
+            row.hash,
+            summary,
+            summaryModel || "@cf/meta/llama-3.2-3b-instruct",
+            now,
+          );
+        } else {
+          if (cfg.aiSummary.endpoint.length === 0 || cfg.aiSummary.key.length === 0) {
+            errors.push("摘要：未配置 AI 摘要端点");
+          } else {
+            const summary = await generateSummaryByok(
+              cfg.aiSummary.endpoint,
+              cfg.aiSummary.key,
+              summaryModel,
+              stripped,
+            );
+            await storeSummaryResult(c.env, row.hash, summary, summaryModel, now);
+          }
+        }
+      } catch (error) {
+        errors.push(`摘要: ${String(error)}`);
+      }
+    }
+
+    if (kinds.includes("embed")) {
+      try {
+        const vector = await generateEmbed(c.env, embedModel, stripped);
+        await storeEmbedResult(
+          c.env,
+          row.hash,
+          embedModel,
+          now,
+          vector,
+          chunkText(stripped).length,
+        );
+      } catch (error) {
+        errors.push(`嵌入: ${String(error)}`);
+      }
+    }
+
+    const result = await c.env.DB.prepare(
+      "SELECT summary, summary_model, summary_at, embed_model, embed_at, embed_vec FROM ai_results WHERE hash = ?",
+    )
+      .bind(row.hash)
+      .first<{
+        summary: string | null;
+        summary_model: string | null;
+        summary_at: string | null;
+        embed_model: string | null;
+        embed_at: string | null;
+        embed_vec: string | null;
+      }>();
+    return c.json({
+      hash: row.hash,
+      summary: {
+        present: result !== null && result.summary !== null && result.summary.length > 0,
+        model: result?.summary_model ?? null,
+        at: result?.summary_at ?? null,
+      },
+      embed: {
+        present: result !== null && result.embed_vec !== null && result.embed_vec.length > 0,
+        model: result?.embed_model ?? null,
+        at: result?.embed_at ?? null,
+      },
+      errors,
+    });
+  });
+
   app.post("/api/ai/summary", authMiddleware(["ai"]), async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = SummaryRequestSchema.safeParse(body);
@@ -75,11 +183,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     }
 
     const now = new Date().toISOString();
-    await c.env.DB.prepare(
-      "INSERT INTO ai_results (hash, summary, summary_model, summary_at) VALUES (?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET summary=excluded.summary, summary_model=excluded.summary_model, summary_at=excluded.summary_at",
-    )
-      .bind(hash, summaryText, usedModel, now)
-      .run();
+    await storeSummaryResult(c.env, hash, summaryText, usedModel, new Date(now));
 
     // KV 缓存写入：defer（线上 waitUntil）保证落盘，floating promise 会被丢弃
     if (c.env.CACHE !== undefined) {

@@ -3,6 +3,8 @@ import { ApiErrorSchema } from "./schemas/common";
 import {
   AiStatusRequestSchema,
   AiStatusResponseSchema,
+  AiGenerateRequestSchema,
+  AiGenerateResponseSchema,
   EmbedRequestSchema,
   EmbedResponseSchema,
   SimilarRequestSchema,
@@ -170,6 +172,18 @@ export class HyacineClient {
   }
 
   // ---- ai -------------------------------------------------------------
+
+  async generateAi(
+    req: z.infer<typeof AiGenerateRequestSchema>,
+  ): Promise<z.infer<typeof AiGenerateResponseSchema>> {
+    return this.#request(
+      AiGenerateResponseSchema,
+      "POST",
+      "/api/ai/generate",
+      req,
+      AiGenerateRequestSchema,
+    );
+  }
 
   async aiSummary(
     req: z.infer<typeof SummaryRequestSchema>,

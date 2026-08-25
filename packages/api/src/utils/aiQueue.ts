@@ -206,7 +206,7 @@ export async function generateSummaryWorkersAi(
 
 // ---- 嵌入生成（Workers AI） -------------------------------------------------
 
-async function generateEmbed(env: Env, model: string, stripped: string): Promise<number[]> {
+export async function generateEmbed(env: Env, model: string, stripped: string): Promise<number[]> {
   if (env.AI === undefined) throw new Error("Workers AI 未绑定");
   const chunks = chunkText(stripped);
   const vectors: number[][] = [];
@@ -231,6 +231,37 @@ async function generateEmbed(env: Env, model: string, stripped: string): Promise
     vectors.push(embedding);
   }
   return meanPool(vectors);
+}
+
+// ---- 结果落库（queue 与手动 /api/ai/generate 共用） ------------------------
+
+export async function storeSummaryResult(
+  env: Env,
+  hash: string,
+  summary: string,
+  model: string,
+  at: Date,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO ai_results (hash, summary, summary_model, summary_at) VALUES (?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET summary=excluded.summary, summary_model=excluded.summary_model, summary_at=excluded.summary_at",
+  )
+    .bind(hash, summary, model, at.toISOString())
+    .run();
+}
+
+export async function storeEmbedResult(
+  env: Env,
+  hash: string,
+  model: string,
+  at: Date,
+  vector: number[],
+  chunks: number,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
+  )
+    .bind(hash, model, vector.length, at.toISOString(), JSON.stringify(vector), chunks)
+    .run();
 }
 
 // ---- 队列消费 -----------------------------------------------------------------
@@ -320,26 +351,11 @@ async function processOne(
         provider === "workers-ai"
           ? await generateSummaryWorkersAi(env, summaryModel, stripped)
           : await generateSummaryByok(byokEndpoint, byokKey, summaryModel, stripped);
-      await env.DB.prepare(
-        "INSERT INTO ai_results (hash, summary, summary_model, summary_at) VALUES (?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET summary=excluded.summary, summary_model=excluded.summary_model, summary_at=excluded.summary_at",
-      )
-        .bind(row.hash, summary, summaryModel, now.toISOString())
-        .run();
+      await storeSummaryResult(env, row.hash, summary, summaryModel, now);
     }
     if (row.kind === "embed" || row.kind === "both") {
       const vector = await generateEmbed(env, embedModel, stripped);
-      await env.DB.prepare(
-        "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
-      )
-        .bind(
-          row.hash,
-          embedModel,
-          vector.length,
-          now.toISOString(),
-          JSON.stringify(vector),
-          chunkText(stripped).length,
-        )
-        .run();
+      await storeEmbedResult(env, row.hash, embedModel, now, vector, chunkText(stripped).length);
     }
     await env.DB.prepare("DELETE FROM ai_queue WHERE hash = ?").bind(row.hash).run();
     return { ...base, outcome: "done" };
