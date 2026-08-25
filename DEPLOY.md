@@ -187,6 +187,29 @@ curl -X POST https://<worker>/api/auth/setup \
 - 可再创建受限子 token：`POST /api/auth/tokens`（需 admin），scope 为 `posts.r`/`posts.w`/`ai`。
 - `/api/auth/setup` 带 KV 尝试限流（10 次/分/IP），失败后 1 分钟再试。
 
+### 3.7 启用 AI：summary（摘要）与 embed（嵌入）
+
+两者独立，`/api/health` 的 `ai.summary` / `ai.embed` 即对应是否就绪：
+
+**summary（BYOK，不需要 Workers AI）**
+
+- 三个环境项（`wrangler secret put` 或 Dashboard Bindings → 变量/Secret）：
+  - `AI_SUMMARY_ENDPOINT`：OpenAI 兼容 chat completions URL，如 `https://api.openai.com/v1/chat/completions`
+  - `AI_SUMMARY_KEY`：对应 API Key
+  - `AI_SUMMARY_MODEL`：模型名，如 `gpt-4o-mini`
+- 调用链：`/api/ai/summary` → `fetch(endpoint, Bearer key, 正文前 8000 字, max_tokens 200)` → 写 D1 + KV 缓存（`ai:{hash}:{model}`，7 天）
+- 验证：health `ai.summary:true`；然后 `hyc ai:summary <query>` 或管理台 Editor「AI 摘要」按钮生成
+
+**embed（依赖 Workers AI binding）**
+
+- 需要：
+  - `[ai]` binding：wrangler.toml 已含 `[ai] binding = "AI"`（方案 A 部署自动带；**方案 B** 需在 Dashboard Bindings 页加 Workers AI 绑定，且 binding 名必须为 `AI`）
+  - `EMBED_MODEL`：默认回退 `@cf/baai/bge-m3`（1024 维、中文友好、免费档）；也可显式 `wrangler secret put EMBED_MODEL`
+- 调用链：`/api/ai/embed` → `env.AI.run(model, { text })` 逐块嵌入 → mean 池化为文档向量 → D1 `embed_vec`
+- ⚠️ **embed 只走 Workers AI（`env.AI.run`）**，目前没有 OpenAI 兼容 embedding 端点回退；不绑 Workers AI 则 `/api/ai/embed` 恒 503「Workers AI 未绑定」
+- ⚠️ 换模型 = 旧向量作废（`ai_results` 按 `embed_model` 区分）；`ai/similar` 全表扫有向量行，不建议混模型
+- 验证：health `ai.embed:true`；`hyc ai:embed` 生成（`hyc sync` 返回的 `ai.needs` 会提示缺哪些 hash 的 summary/embed）
+
 ---
 
 ## 4. CLI

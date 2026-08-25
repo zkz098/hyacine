@@ -37,6 +37,13 @@ const zhCN: Record<string, string> = {
   "posts.ai.embed": "嵌入",
   "sync.title": "同步历史",
   "sync.empty": "暂无同步记录",
+  "sync.uploadNow": "同步到云端",
+  "sync.uploading": "同步中...",
+  "sync.refresh": "刷新",
+  "sync.hint":
+    "提示：“同步到云端”会把本地博客目录的文章/资产索引上行到 API（桌面模式，需先在「工作区」打开目录）；删除推断与 AI 产物生成请用 CLI `hyc sync`。",
+  "sync.uploaded": "已同步：文章 {posts}（变更 {changed}）、资产 {assets}、删除 {deleted}",
+  "sync.needs": "{count} 个文章待生成 AI 产物（summary/embed）",
   "assets.title": "远程资产",
   "assets.upload": "上传",
   "assets.uploading": "上传中...",

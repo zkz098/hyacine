@@ -1,6 +1,10 @@
-import { createResource, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show } from "solid-js";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
+import { projectStore } from "../store/project";
+import { isTauri } from "../tauri/bridge";
+import { buildCloudSyncPayload } from "../lib/syncCloud";
+import type { SyncUploadResponse } from "@hyacine/contract";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 
@@ -11,19 +15,87 @@ export function Sync(): import("solid-js").JSX.Element {
     return res.entries;
   });
 
+  const [syncing, setSyncing] = createSignal(false);
+  const [syncError, setSyncError] = createSignal<string | null>(null);
+  const [lastResult, setLastResult] = createSignal<SyncUploadResponse | null>(null);
+
+  const handleSyncCloud = async (): Promise<void> => {
+    setSyncing(true);
+    setSyncError(null);
+    setLastResult(null);
+    try {
+      if (!isTauri()) throw new Error("仅桌面模式可用");
+      const dir = projectStore.getProjectDir();
+      const cfg = projectStore.projectConfig();
+      const posts = projectStore.posts();
+      if (dir === null || cfg === null) {
+        throw new Error("未选择博客目录，请先在「工作区」打开项目");
+      }
+      const payload = await buildCloudSyncPayload({
+        projectRoot: dir,
+        contentDir: cfg.contentDir,
+        assetsDir: cfg.assetsDir,
+        posts,
+      });
+      const client = apiStore.getClient();
+      const res = await client.syncUpload(payload);
+      setLastResult(res);
+      await refetch();
+    } catch (err: unknown) {
+      setSyncError(messageOf(err));
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div class="flex flex-col gap-4">
       <div class="flex items-center justify-between">
         <h1 class="text-xl font-bold">{t("sync.title")}</h1>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
-        >
-          <span class="i-ri-refresh-line mr-1" />
-          刷新
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={syncing()}
+            onClick={() => void handleSyncCloud()}
+            class="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-sm cursor-pointer hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          >
+            <span class="i-ri-upload-line mr-1" />
+            {syncing() ? t("sync.uploading") : t("sync.uploadNow")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
+          >
+            <span class="i-ri-refresh-line mr-1" />
+            {t("sync.refresh")}
+          </button>
+        </div>
       </div>
+
+      <Alert variant="info">{t("sync.hint")}</Alert>
+
+      <Show when={syncError()}>
+        <Alert variant="error">{syncError()}</Alert>
+      </Show>
+
+      <Show when={lastResult()}>
+        {(r) => (
+          <Alert variant="success">
+            {t("sync.uploaded", {
+              posts: String(r().accepted.posts),
+              assets: String(r().accepted.assets),
+              changed: String(r().changedHashes.length),
+              deleted: String(r().deletedPaths.length),
+            })}
+            <Show when={r().ai.needs.length > 0}>
+              <span class="block mt-1 text-sm">
+                {t("sync.needs", { count: String(r().ai.needs.length) })}
+              </span>
+            </Show>
+          </Alert>
+        )}
+      </Show>
 
       <Show when={log.error}>
         <Alert variant="error">{messageOf(log.error)}</Alert>
