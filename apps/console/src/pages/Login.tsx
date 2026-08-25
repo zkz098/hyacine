@@ -70,13 +70,22 @@ export function Login(): import("solid-js").JSX.Element {
           {loading() ? "..." : t("login.submit")}
         </button>
         {isTauri() && (
-          <button
-            type="button"
-            onClick={() => navigate("/workspace")}
-            class="w-full py-2 rounded border border-[var(--border)] text-sm text-[var(--muted)] hover:text-[var(--text)]"
-          >
-            {t("login.skipLocal")}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => navigate("/workspace")}
+              class="w-full py-2 rounded border border-[var(--border)] text-sm text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              {t("login.skipLocal")}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/install")}
+              class="w-full py-2 rounded border border-[var(--border)] text-sm text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              🚀 安装 Blog（Setup 模式）
+            </button>
+          </>
         )}
       </div>
     </div>

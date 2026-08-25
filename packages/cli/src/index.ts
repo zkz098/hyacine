@@ -10,6 +10,7 @@ import { loadRemoteState, saveRemoteState, isRemoteConfigured } from "./remote/s
 import { t } from "./i18n";
 import { autoSlug } from "@hyacine/contract";
 import { materializeSummary, hasUpToDateSummary } from "./frontmatter";
+import { installBlog } from "./services/install";
 import { scanPosts, findPostByQuery, createPost } from "./services/posts";
 import { buildSyncPayload, chunkText } from "./services/sync";
 import { createBackup } from "./services/backup";
@@ -93,6 +94,50 @@ program
     console.log(t("init.created", { path: ymlPath }));
     console.log(t("init.done", { contentDir: "src/posts", assetsDir: "src/assets" }));
   });
+
+// ---- install / setup（旧 hyc setup 模式移植） ----
+program
+  .command("install")
+    .alias("setup")
+    .argument("[dir]", "target directory (default: cwd)")
+    .option("--source <source>", "clone source: github|gh-proxy|gh-proxy-v6", "github")
+    .option("--repository <url>", "template repository URL")
+    .option("--install", "run dependency install after clone", false)
+    .option("--pm <pm>", "package manager: pnpm|npm|bun", "pnpm")
+    .description("install a new blog from astro-blog-shokax template (setup mode)")
+    .action(
+      async (
+        dirArg: string | undefined,
+        opts: {
+          source?: string;
+          repository?: string;
+          install?: boolean;
+          pm?: string;
+        },
+      ) => {
+        try {
+          const source = (opts.source ?? "github") as
+            | "github"
+            | "gh-proxy"
+            | "gh-proxy-v6";
+          const pm = (opts.pm ?? "pnpm") as "pnpm" | "npm" | "bun";
+          const result = await installBlog({
+            dir: dirArg ?? process.cwd(),
+            source,
+            repository: opts.repository,
+            install: opts.install === true,
+            packageManager: pm,
+          });
+          console.log(
+            `✔ 安装完成：${result.clonedInto}${result.installed ? "（已安装依赖）" : "（未安装依赖，可在目录内执行 pnpm install）"}`,
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`✘ 安装失败：${message}`);
+          process.exitCode = 1;
+        }
+      },
+    );
 
 // ---- new ----
 program

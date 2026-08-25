@@ -63,6 +63,16 @@ export async function exists(path: string): Promise<boolean> {
   return ex(path);
 }
 
+export async function isEmptyDir(path: string): Promise<boolean> {
+  if (!isTauri()) requireTauri();
+  const { readDir } = await import("@tauri-apps/plugin-fs");
+  try {
+    return (await readDir(path)).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function mkdir(path: string): Promise<void> {
   if (!isTauri()) requireTauri();
   const { mkdir: mk } = await import("@tauri-apps/plugin-fs");
@@ -82,6 +92,34 @@ export async function gitExec(args: string[], cwd: string): Promise<GitResult> {
   const cmd = Command.create("git", args, { cwd } as unknown as Record<string, unknown>);
   const out = await cmd.execute();
   return { stdout: out.stdout, stderr: out.stderr, code: out.code ?? 0 };
+}
+
+/**
+ * 通用 shell 执行：仅允许白名单程序（与 capabilities 的 shell:allow-execute 一致）。
+ * 用于 setup/安装 Blog（git clone / pnpm install）等。
+ */
+const SHELL_ALLOWLIST = new Set(["git", "pnpm", "npm", "bun"]);
+
+export async function runShell(program: string, args: string[], cwd: string): Promise<GitResult> {
+  if (!isTauri()) requireTauri();
+  if (!SHELL_ALLOWLIST.has(program)) {
+    return { stdout: "", stderr: `${program} 不在允许列表`, code: 1 };
+  }
+  const { Command } = await import("@tauri-apps/plugin-shell");
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- shell cwd typed as unknown in plugin
+  const cmd = Command.create(program, args, { cwd } as unknown as Record<string, unknown>);
+  const out = await cmd.execute();
+  return { stdout: out.stdout, stderr: out.stderr, code: out.code ?? 0 };
+}
+
+export async function shellVersion(program: string): Promise<string | null> {
+  try {
+    const r = await runShell(program, ["--version"], "");
+    if (r.code === 0) return (r.stdout || r.stderr).trim();
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function gitVersion(): Promise<string | null> {

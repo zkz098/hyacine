@@ -35,7 +35,12 @@
     },
     {
       "identifier": "shell:allow-execute",
-      "allow": [{ "name": "git", "cmd": "git", "args": true }]
+      "allow": [
+        { "name": "git", "cmd": "git", "args": true },
+        { "name": "pnpm", "cmd": "pnpm", "args": true },
+        { "name": "npm", "cmd": "npm", "args": true },
+        { "name": "bun", "cmd": "bun", "args": true }
+      ]
     }
   ]
 }

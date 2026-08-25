@@ -11,6 +11,7 @@ import { Settings } from "./pages/Settings";
 import { Workspace } from "./pages/Workspace";
 import { Editor } from "./pages/Editor";
 import { Git } from "./pages/Git";
+import { Install } from "./pages/Install";
 import { apiStore } from "./store/api";
 import { isTauri } from "./tauri/bridge";
 
@@ -146,6 +147,14 @@ export function App(): JSX.Element {
           <LocalLayoutGuarded>
             <Git />
           </LocalLayoutGuarded>
+        )}
+      />
+      <Route
+        path="/install"
+        component={() => (
+          <LocalGuarded>
+            <Install />
+          </LocalGuarded>
         )}
       />
     </HashRouter>
