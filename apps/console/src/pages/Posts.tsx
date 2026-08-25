@@ -213,12 +213,10 @@ export function Posts(): import("solid-js").JSX.Element {
                         <td class="px-3 py-2">
                           <button
                             type="button"
-                            disabled={generatingPath() !== null || !primaryAvailable()}
+                            disabled={generatingPath() !== null}
                             onClick={() => void handleGenerateAi(post)}
-                            title={
-                              primaryAvailable() ? "立刻生成摘要与嵌入" : t("posts.ai.primaryOnly")
-                            }
-                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="立刻生成摘要与嵌入（需文章已有正文，两种模式均可用）"
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] disabled:opacity-50"
                           >
                             {generatingPath() === post.path
                               ? t("posts.ai.generating")

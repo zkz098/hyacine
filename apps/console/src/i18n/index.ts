@@ -37,7 +37,6 @@ const zhCN: Record<string, string> = {
   "posts.ai.embed": "嵌入",
   "posts.editRemote": "远程编辑",
   "posts.editDisabled": "Replica 模式不可用：需在设置配置 GitHub 桥（Primary）",
-  "posts.ai.primaryOnly": "Replica 模式不可用：需配置 GitHub 桥（Primary）",
   "posts.editSave": "保存并触发导出",
   "posts.editing": "保存中...",
   "posts.ai.generate": "生成 AI",
