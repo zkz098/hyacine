@@ -133,6 +133,9 @@ importers:
 
   packages/api:
     dependencies:
+      '@hyacine/contract':
+        specifier: workspace:*
+        version: link:../contract
       aws4fetch:
         specifier: ^1.0.19
         version: 1.0.20
