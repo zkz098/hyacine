@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show, onMount } from "solid-js";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
@@ -23,6 +23,16 @@ export function Posts(): import("solid-js").JSX.Element {
   // 立刻生成摘要/嵌入
   const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
   const [genMsg, setGenMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // Primary 可用性：replica 模式远程编辑不可用（D1 非真相源，改完会被本地同步覆盖）
+  const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
+  onMount(() => {
+    void apiStore
+      .getClient()
+      .health()
+      .then((h) => setPrimaryAvailable(h.primary.available))
+      .catch(() => setPrimaryAvailable(false));
+  });
 
   const handleGenerateAi = async (post: { path: string; title: string }): Promise<void> => {
     setGeneratingPath(post.path);
@@ -203,10 +213,12 @@ export function Posts(): import("solid-js").JSX.Element {
                         <td class="px-3 py-2">
                           <button
                             type="button"
-                            disabled={generatingPath() !== null}
+                            disabled={generatingPath() !== null || !primaryAvailable()}
                             onClick={() => void handleGenerateAi(post)}
-                            title="立刻生成摘要与嵌入"
-                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] disabled:opacity-50"
+                            title={
+                              primaryAvailable() ? "立刻生成摘要与嵌入" : t("posts.ai.primaryOnly")
+                            }
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {generatingPath() === post.path
                               ? t("posts.ai.generating")
@@ -214,8 +226,10 @@ export function Posts(): import("solid-js").JSX.Element {
                           </button>
                           <button
                             type="button"
+                            disabled={!primaryAvailable()}
                             onClick={() => void openEdit(post.path)}
-                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] ml-1"
+                            title={t("posts.editDisabled")}
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)] ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {t("posts.editRemote")}
                           </button>

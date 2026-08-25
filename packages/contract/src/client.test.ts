@@ -48,6 +48,7 @@ function healthBody() {
     version: "0.1.0",
     needsSetup: false,
     ai: { summary: true, embed: true },
+    primary: { available: false, repo: null },
   };
 }
 

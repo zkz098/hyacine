@@ -36,6 +36,8 @@ const zhCN: Record<string, string> = {
   "posts.ai.summary": "摘要",
   "posts.ai.embed": "嵌入",
   "posts.editRemote": "远程编辑",
+  "posts.editDisabled": "Replica 模式不可用：需在设置配置 GitHub 桥（Primary）",
+  "posts.ai.primaryOnly": "Replica 模式不可用：需配置 GitHub 桥（Primary）",
   "posts.editSave": "保存并触发导出",
   "posts.editing": "保存中...",
   "posts.ai.generate": "生成 AI",
@@ -47,6 +49,8 @@ const zhCN: Record<string, string> = {
   "sync.uploading": "同步中...",
   "sync.exportNow": "导出到 Git",
   "sync.exporting": "导出中...",
+  "sync.exportDisabled": "Replica 模式不可用：需在设置配置 GitHub 桥（Primary）",
+  "sync.pullDone": "已从云端拉取最新内容写回本地",
   "sync.refresh": "刷新",
   "sync.hint":
     "提示：“同步到云端”会把本地博客目录的文章/资产索引上行到 API（桌面模式，需先在「工作区」打开目录）；删除推断与 AI 产物生成请用 CLI `hyc sync`。",

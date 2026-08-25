@@ -1,9 +1,10 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createResource, createSignal, For, Show, onMount } from "solid-js";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { projectStore } from "../store/project";
-import { isTauri } from "../tauri/bridge";
+import { isTauri, writeTextFile } from "../tauri/bridge";
 import { buildCloudSyncPayload } from "../lib/syncCloud";
+import { pullExportToLocal } from "../lib/exportPull";
 import type { SyncUploadResponse } from "@hyacine/contract";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
@@ -20,6 +21,17 @@ export function Sync(): import("solid-js").JSX.Element {
   const [lastResult, setLastResult] = createSignal<SyncUploadResponse | null>(null);
   const [exporting, setExporting] = createSignal(false);
   const [exportMsg, setExportMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [syncNote, setSyncNote] = createSignal<string | null>(null);
+
+  // Primary 可用性（github 桥配置齐）
+  const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
+  onMount(() => {
+    void apiStore
+      .getClient()
+      .health()
+      .then((h) => setPrimaryAvailable(h.primary.available))
+      .catch(() => setPrimaryAvailable(false));
+  });
 
   const handleExport = async (): Promise<void> => {
     setExporting(true);
@@ -59,6 +71,16 @@ export function Sync(): import("solid-js").JSX.Element {
       const client = apiStore.getClient();
       const res = await client.syncUpload(payload);
       setLastResult(res);
+      setSyncNote(null);
+      // Primary 模式：上行后下行（export 全量写回本地文件），实现双向同步
+      if (primaryAvailable()) {
+        const snapshot = await client.exportSnapshot();
+        const { written } = await pullExportToLocal(dir, cfg.contentDir, snapshot, {
+          writeTextFile,
+        });
+        setSyncNote(`${t("sync.pullDone")}（${String(written)} 篇）`);
+        await projectStore.refreshPosts();
+      }
       await refetch();
     } catch (err: unknown) {
       setSyncError(messageOf(err));
@@ -83,10 +105,14 @@ export function Sync(): import("solid-js").JSX.Element {
           </button>
           <button
             type="button"
-            disabled={exporting()}
+            disabled={exporting() || !primaryAvailable()}
             onClick={() => void handleExport()}
-            title="Primary 模式：触发 GitHub Action 把 D1 导出到博客仓库"
-            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm disabled:opacity-50"
+            title={
+              primaryAvailable()
+                ? "Primary 模式：触发 GitHub Action 把 D1 导出到博客仓库"
+                : t("sync.exportDisabled")
+            }
+            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span class="i-ri-git-branch-line mr-1" />
             {exporting() ? t("sync.exporting") : t("sync.exportNow")}
@@ -106,6 +132,10 @@ export function Sync(): import("solid-js").JSX.Element {
 
       <Show when={syncError()}>
         <Alert variant="error">{syncError()}</Alert>
+      </Show>
+
+      <Show when={syncNote() !== null}>
+        <Alert variant="success">{syncNote()}</Alert>
       </Show>
 
       <Show when={exportMsg()}>

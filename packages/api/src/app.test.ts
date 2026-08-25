@@ -39,10 +39,28 @@ describe("health", () => {
     const json = (await response.json()) as {
       ok: boolean;
       ai: { summary: boolean; embed: boolean };
+      primary: { available: boolean; repo: string | null };
     };
     expect(json.ok).toBe(true);
     expect(json.ai.summary).toBe(true);
     expect(json.ai.embed).toBe(true);
+    // github 未配置 → primary 不可用
+    expect(json.primary.available).toBe(false);
+    expect(json.primary.repo).toBeNull();
+  });
+
+  it("github 配置齐后 primary.available=true（含 repo）", async () => {
+    const env = createTestEnv();
+    const db = getFakeD1(env);
+    db.appConfig.set("github.repoOwner", "me");
+    db.appConfig.set("github.repoName", "blog");
+    db.appConfig.set("github.token", "ghp_x");
+    const response = await request(env, "GET", "/api/health");
+    const json = (await response.json()) as {
+      primary: { available: boolean; repo: string | null };
+    };
+    expect(json.primary.available).toBe(true);
+    expect(json.primary.repo).toBe("me/blog");
   });
 
   it("returns needsSetup true when SETUP_CODE absent", async () => {
