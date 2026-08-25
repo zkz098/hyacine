@@ -176,7 +176,7 @@ export function Tokens(): import("solid-js").JSX.Element {
                             <button
                               type="button"
                               onClick={() => void handleRevoke(tok.id)}
-                              class="px-2 py-1 rounded bg-red-50 text-red-600 text-xs border border-red-200 hover:bg-red-100"
+                              class="px-2 py-1 rounded btn-danger text-xs"
                             >
                               {t("tokens.revoke")}
                             </button>

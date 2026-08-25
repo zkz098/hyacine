@@ -1,26 +1,141 @@
+/* ============================================================
+ * hyacine 管理台 · ShokaX 风格主题
+ *
+ * 策略：保留现有语义变量名（--bg/--surface/--text/--muted/
+ * --border/--accent/--accent-hover/--danger/--ok）让所有 JSX 继续
+ * 工作，但把**取值**映射到 ShokaX 的 oklch 调色盘与语义 token，
+ * 从而实现整体换肤、无需改动组件结构。
+ * ============================================================ */
+
+/* ---------- ShokaX 调色盘（oklch，与博客 palette.css 一致） ---------- */
 :root {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --text: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --danger: #ef4444;
-  --ok: #22c55e;
-  --radius: 8px;
+  /* 灰阶 */
+  --g-0: oklch(1 0 0); /*  白 */
+  --g-1: oklch(0.995 0 0);
+  --g-2: oklch(0.975 0 0);
+  --g-3: oklch(0.952 0.004 240);
+  --g-4: oklch(0.845 0 0);
+  --g-5: oklch(0.597 0 0);
+  --g-6: oklch(0.522 0 0);
+  --g-7: oklch(0.321 0 0);
+  --g-8: oklch(0.252 0 0);
+  --g-9: oklch(0 0 0); /*  黑 */
+
+  /* 语义色 */
+  --c-red: oklch(0.579 0.24 22.2);
+  --c-pink: oklch(0.709 0.168 351.2);
+  --c-orange: oklch(0.721 0.176 42.4);
+  --c-yellow: oklch(0.791 0.182 91.8);
+  --c-green: oklch(0.517 0.178 143.2);
+  --c-aqua: oklch(0.638 0.1 197.2);
+  --c-blue: oklch(0.679 0.142 240.7);
+  --c-purple: oklch(0.569 0.121 336.2);
+  --c-grey: oklch(0.654 0.02 224.3);
+
+  --c-pink-light: oklch(0.946 0.06 338.1 / 0.72);
+  --c-cyan-light: oklch(0.972 0.038 169.1 / 0.72);
+
+  /* 阴影（分层） */
+  --shadow-card-base: 0 2px 8px oklch(0 0 0 / 0.1);
+  --shadow-card-hover: 0 8px 16px oklch(0 0 0 / 0.15);
+  --shadow-float: 0 0.5rem 1rem oklch(0 0 0 / 0.4);
+
+  /* 导航横幅渐变（ShokaX 特色） */
+  --nav-bg: linear-gradient(-225deg, var(--c-cyan-light) 0%, var(--c-pink-light) 100%);
+
+  /* ---------- 语义变量 → ShokaX 取值（浅色） ---------- */
+  --bg: #f7f8fa; /* 近白灰，视觉留白 */
+  --surface: var(--g-0);
+  --text: var(--g-7);
+  --muted: var(--g-5);
+  --border: var(--g-3);
+  --accent: var(--c-red);
+  --accent-hover: oklch(0.52 0.24 24);
+  --danger: var(--c-red);
+  --ok: var(--c-green);
+  --radius: 3px; /* ShokaX 小圆角 */
+
+  --font-sans: "Segoe UI", "LXGW WenKai", "LXGW WenKai GB", "PingFang SC",
+    "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Maple Mono", "Maple Mono NF", "JetBrains Mono", "Cascadia Code",
+    Consolas, "Courier New", monospace;
+
+  /* Note 语义 token（复用 ShokaX 提示卡配色，供 Alert/徽标使用） */
+  --note-primary-border: oklch(0.759 0.09 332.2);
+  --note-primary-bg: oklch(0.984 0.018 320.3);
+  --note-primary-text: oklch(0.568 0.182 317.8);
+  --note-info-border: oklch(0.725 0.108 274.3);
+  --note-info-bg: oklch(0.976 0.018 242.6);
+  --note-info-text: oklch(0.411 0.102 252.2);
+  --note-success-border: oklch(0.793 0.092 130.4);
+  --note-success-bg: oklch(0.993 0.026 115.7);
+  --note-success-text: oklch(0.467 0.128 139.5);
+  --note-warning-border: oklch(0.794 0.048 85.5);
+  --note-warning-bg: oklch(0.987 0.035 97.8);
+  --note-warning-text: oklch(0.611 0.152 88.6);
+  --note-danger-border: oklch(0.817 0.114 0.7);
+  --note-danger-bg: oklch(0.97 0.026 359.8);
+  --note-danger-text: oklch(0.57 0.248 20.1);
 }
 
 [data-theme="dark"] {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --text: #f1f5f9;
-  --muted: #94a3b8;
-  --border: #334155;
-  --accent: #60a5fa;
-  --accent-hover: #3b82f6;
-  --danger: #f87171;
-  --ok: #4ade80;
+  /* 灰阶翻转（ShokaX 暗色灰阶） */
+  --g-0: oklch(0.252 0 0);
+  --g-1: oklch(0.283 0.011 264);
+  --g-2: oklch(0.361 0 0);
+  --g-3: oklch(0.426 0 0);
+  --g-4: oklch(0.522 0 0);
+  --g-5: oklch(0.757 0 0);
+  --g-6: oklch(0.845 0 0);
+  --g-7: oklch(0.901 0 0);
+  --g-8: oklch(0.949 0 0);
+  --g-9: oklch(0.975 0 0);
+
+  --c-red: oklch(0.616 0.175 21.6);
+  --c-pink: oklch(0.709 0.118 351.2 / 0.8);
+  --c-orange: oklch(0.721 0.122 42.4 / 0.8);
+  --c-yellow: oklch(0.934 0.04 102);
+  --c-green: oklch(0.765 0.088 143.7);
+  --c-aqua: oklch(0.848 0.047 197.5);
+  --c-blue: oklch(0.864 0.052 240.1);
+  --c-purple: oklch(0.786 0.066 330.3);
+  --c-grey: oklch(0.885 0 0);
+
+  --c-pink-light: oklch(0.313 0.011 347.9);
+  --c-cyan-light: oklch(0.321 0.006 174.8);
+
+  --shadow-card-base: 0 2px 8px oklch(0 0 0 / 0.2);
+  --shadow-card-hover: 0 8px 16px oklch(0 0 0 / 0.3);
+  --shadow-float: 0 0.5rem 1rem oklch(0 0 0 / 0.45);
+
+  /* ---------- 语义变量 → ShokaX 取值（暗色） ---------- */
+  --bg: var(--g-0);
+  --surface: var(--g-1);
+  --text: var(--g-7);
+  --muted: var(--g-6);
+  --border: var(--g-3);
+  --accent: var(--c-red);
+  --accent-hover: oklch(0.7 0.17 24);
+  --danger: var(--c-red);
+  --ok: var(--c-green);
+  --radius: 3px;
+
+  /* Note 语义 token（暗色） */
+  --note-primary-border: oklch(0.72 0.078 332.2);
+  --note-primary-bg: oklch(0.94 0.015 320.3);
+  --note-primary-text: oklch(0.54 0.164 317.8);
+  --note-info-border: oklch(0.69 0.094 274.3);
+  --note-info-bg: oklch(0.935 0.015 242.6);
+  --note-info-text: oklch(0.39 0.092 252.2);
+  --note-success-border: oklch(0.755 0.081 130.4);
+  --note-success-bg: oklch(0.95 0.021 115.7);
+  --note-success-text: oklch(0.442 0.115 139.5);
+  --note-warning-border: oklch(0.756 0.042 85.5);
+  --note-warning-bg: oklch(0.944 0.029 97.8);
+  --note-warning-text: oklch(0.58 0.136 88.6);
+  --note-danger-border: oklch(0.776 0.099 0.7);
+  --note-danger-bg: oklch(0.93 0.022 359.8);
+  --note-danger-text: oklch(0.54 0.223 20.1);
 }
 
 * {
@@ -31,7 +146,7 @@ html,
 body {
   margin: 0;
   padding: 0;
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
 }
@@ -45,8 +160,63 @@ a {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-card-base);
+  transition: box-shadow 0.2s ease;
+}
+
+.surface:hover {
+  box-shadow: var(--shadow-card-hover);
 }
 
 .text-muted {
   color: var(--muted);
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+/* 代码等宽元素统一走 --font-mono */
+code,
+pre,
+kbd,
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ShokaX 特色：信息横幅渐变（用于侧边栏品牌区/顶部） */
+.brand-gradient {
+  background: var(--nav-bg);
+  color: var(--text);
+}
+
+/* 语义徽标（草稿/已发布等） */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  border: 1px solid;
+}
+.chip-warning {
+  background: var(--note-warning-bg);
+  color: var(--note-warning-text);
+  border-color: var(--note-warning-border);
+}
+.chip-success {
+  background: var(--note-success-bg);
+  color: var(--note-success-text);
+  border-color: var(--note-success-border);
+}
+
+/* 危险操作按钮（ShokaX danger note 语义） */
+.btn-danger {
+  background: var(--note-danger-bg);
+  color: var(--note-danger-text);
+  border: 1px solid var(--note-danger-border);
+}
+.btn-danger:hover {
+  filter: brightness(0.97);
 }

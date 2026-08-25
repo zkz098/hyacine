@@ -42,8 +42,8 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
           fixed inset-y-0 left-0 z-20 transition-transform
           lg:translate-x-0 ${open() ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
       >
-        <div class="h-14 flex items-center px-4 border-b border-[var(--border)] font-bold text-lg">
-          <span class="i-ri-quill-pen-line mr-2 text-[var(--accent)]" />
+        <div class="h-14 flex items-center px-4 border-b border-[var(--border)] font-bold text-lg brand-gradient">
+          <span class="i-ri-quill-pen-line mr-2" />
           hyacine
         </div>
         <nav class="flex-1 p-2 flex flex-col gap-1">

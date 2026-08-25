@@ -127,13 +127,9 @@ export function Workspace(): import("solid-js").JSX.Element {
                       <td class="px-3 py-2 text-muted text-xs">{post.slug}</td>
                       <td class="px-3 py-2">
                         {post.draft ? (
-                          <span class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 text-xs">
-                            草稿
-                          </span>
+                          <span class="chip chip-warning">草稿</span>
                         ) : (
-                          <span class="px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs">
-                            已发布
-                          </span>
+                          <span class="chip chip-success">已发布</span>
                         )}
                       </td>
                       <td class="px-3 py-2 text-xs">

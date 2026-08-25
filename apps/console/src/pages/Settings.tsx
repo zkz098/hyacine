@@ -147,7 +147,7 @@ export function Settings(): import("solid-js").JSX.Element {
         <button
           type="button"
           onClick={handleLogout}
-          class="self-start px-4 py-2 rounded bg-red-50 text-red-600 text-sm border border-red-200 hover:bg-red-100"
+          class="self-start px-4 py-2 rounded btn-danger text-sm"
         >
           {t("settings.logout")}
         </button>
