@@ -12,6 +12,9 @@ import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 import { ShokaxToolbar } from "../editor/ShokaxToolbar";
 import { renderPreview } from "../editor/preview";
+import { loadEnabledPlugins } from "../editor/syntax/pluginSettings";
+import { loadProjectSyntaxPlugins } from "../editor/syntax/projectPlugins";
+import type { SyntaxPlugin } from "../editor/syntax/types";
 
 type Mode = "split" | "source" | "preview";
 type FmMode = "form" | "raw";
@@ -78,7 +81,18 @@ export function Editor(): import("solid-js").JSX.Element {
   // 预览用 satteri 渲染（与博客同管线）
   const isMdxFile = (): boolean => /\.mdx$/i.test(path());
   const [previewSrc, setPreviewSrc] = createSignal("");
-  const [previewNode] = createResource(previewSrc, (md) => renderPreview(md, isMdxFile()));
+  // 语法插件：启用列表（设置）+ 项目插件（.hyacine/plugins）
+  const [enabledPlugins, setEnabledPlugins] = createSignal(loadEnabledPlugins());
+  const [userPlugins, setUserPlugins] = createSignal<SyntaxPlugin[]>([]);  const [pluginsError, setPluginsError] = createSignal<string | null>(null);
+  const [pluginRevision, setPluginRevision] = createSignal(0);
+  const [previewNode] = createResource(
+    () => [previewSrc(), pluginRevision()] as const,
+    ([src]) =>
+      renderPreview(src, isMdxFile(), {
+        enabled: enabledPlugins(),
+        plugins: userPlugins(),
+      }),
+  );
 
   const isPreviewBusy = (): boolean => previewNode.loading;
 
@@ -161,8 +175,36 @@ export function Editor(): import("solid-js").JSX.Element {
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    // 设置页切换插件后返回：重建预览
+    const onPluginsChanged = (): void => {
+      setEnabledPlugins(loadEnabledPlugins());
+      setPluginRevision((r) => r + 1);
+    };
+    window.addEventListener("hyacine:plugins-changed", onPluginsChanged);
+    void resolveProjectPlugins();
+    return () => {
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("hyacine:plugins-changed", onPluginsChanged);
+    };
   });
+
+  /** 读取项目级插件（.hyacine/plugins/*.js）并刷新预览 */
+  const resolveProjectPlugins = async (): Promise<void> => {
+    const dir = projectStore.projectDir();
+    if (dir === null) return;
+    try {
+      const result = await loadProjectSyntaxPlugins(dir);
+      setUserPlugins(result.plugins);
+      if (result.errors.length > 0) {
+        setPluginsError(`插件加载错误：${result.errors.join(" | ")}`);
+      } else {
+        setPluginsError(null);
+      }
+      setPluginRevision((r) => r + 1);
+    } catch (e: unknown) {
+      setPluginsError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   createEffect(() => {
     // 当 path 变化重新加载（含首次）
@@ -429,6 +471,9 @@ export function Editor(): import("solid-js").JSX.Element {
 
       <Show when={err() !== null}>
         <Alert variant="error">{err()}</Alert>
+      </Show>
+      <Show when={pluginsError() !== null}>
+        <Alert variant="warning">{pluginsError()}</Alert>
       </Show>
       <Show when={msg() !== null}>
         <Alert variant="info">{msg()}</Alert>

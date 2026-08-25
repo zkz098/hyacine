@@ -7,5 +7,6 @@ export * from "./schemas/sync";
 export * from "./schemas/stats";
 export * from "./schemas/config";
 export * from "./schemas/git";
+export * from "./schemas/syntax";
 export * from "./slug";
 export * from "./client";

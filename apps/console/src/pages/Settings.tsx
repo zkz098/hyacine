@@ -6,6 +6,12 @@ import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 import { isTauri, gitVersion } from "../tauri/bridge";
 import { projectStore } from "../store/project";
+import {
+  loadEnabledPlugins,
+  notifyPluginsChanged,
+  togglePluginEnabled,
+} from "../editor/syntax/pluginSettings";
+import { loadProjectSyntaxPlugins } from "../editor/syntax/projectPlugins";
 import type { ConfigUpdateRequest } from "@hyacine/contract";
 
 interface CloudForm {
@@ -146,6 +152,27 @@ export function Settings(): import("solid-js").JSX.Element {
     setCloudForm((f) => ({ ...f, [key]: value }));
   };
 
+  // 语法插件设置（本地预览）
+  const [pluginEnabledTick, setPluginEnabledTick] = createSignal(0);
+  const [projectPluginNames, setProjectPluginNames] = createSignal<string[]>([]);
+  const [projectPluginErrors, setProjectPluginErrors] = createSignal<string[]>([]);
+
+  const refreshProjectPlugins = async (): Promise<void> => {
+    const dir = projectStore.projectDir();
+    if (dir === null) return;
+    const result = await loadProjectSyntaxPlugins(dir);
+    setProjectPluginNames(
+      result.loaded.length > 0 ? result.loaded : result.plugins.map((p) => p.name),
+    );
+    setProjectPluginErrors(result.errors);
+  };
+
+  onMount(() => {
+    if (isTauri()) {
+      void gitVersion().then((v) => setGitVer(v));
+      void refreshProjectPlugins();
+    }
+  });
   onMount(() => {
     if (isTauri()) {
       void gitVersion().then((v) => setGitVer(v));
@@ -441,6 +468,49 @@ export function Settings(): import("solid-js").JSX.Element {
           </Show>
         </div>
       </Show>
+
+      <div class="surface p-4 flex flex-col gap-3">
+        <h2 class="font-semibold text-sm">语法插件（预览端）</h2>
+        <p class="text-xs text-muted">
+          内置 ShokaX 扩展语法已拆为插件；项目可在
+          <code class="text-mono">.hyacine/plugins/*.js</code>里用
+          <code class="text-mono">{"registerSyntaxPlugin({ ... })"}</code>{" "}
+          注册自定义组件/CSS（本地代码，勿装不明来源插件）。
+        </p>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pluginEnabledTick() >= 0 && loadEnabledPlugins().includes("shokax-basic")}
+            onChange={(e) => {
+              togglePluginEnabled("shokax-basic", e.currentTarget.checked);
+              setPluginEnabledTick((v) => v + 1);
+              notifyPluginsChanged();
+            }}
+          />
+          <span>
+            shokax-basic（Note 卡片 / code-group / span / ruby / spoiler / ++插入++ / Quiz / Tabs）
+          </span>
+        </label>
+        <Show when={isTauri()}>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshProjectPlugins()}
+              class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
+            >
+              重新扫描项目插件
+            </button>
+            <span class="text-xs text-muted">
+              {projectPluginNames().length > 0
+                ? `已加载：${projectPluginNames().join(", ")}`
+                : "未发现 .hyacine/plugins/*.js"}
+            </span>
+          </div>
+          <Show when={projectPluginErrors().length > 0}>
+            <Alert variant="warning">{projectPluginErrors().join(" | ")}</Alert>
+          </Show>
+        </Show>
+      </div>
 
       <div class="surface p-4 flex flex-col gap-2">
         <button

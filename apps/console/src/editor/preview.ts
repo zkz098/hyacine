@@ -1,6 +1,6 @@
 /**
  * ShokaX 一致性预览：用与 astro-blog-shokax **同一个** satteri 渲染管线
- * （同版本 satteri + 同一批 mdast/hast 插件 + feathers 配置）把 markdown/mdx
+ * （同版本 satteri + 插件化 mdast/hast + feathers 配置）把 markdown/mdx
  * 渲染成与博客一致的 HTML 结构，再套上 ShokaX 的 CSS。
  *
  * - 纯 markdown（.md）→ markdownToHtml（快，直接输出 html 字符串）
@@ -9,64 +9,21 @@
  * - 代码块 → Shiki（github-light/dark 双主题 + colorized-brackets，同博客）包
  *   进 macOS 风格 code-window
  *
+ * 语法插件化（P-a/P-b）：
+ * - 内置扩展语法拆为 shokax-basic 插件（editor/syntax/shokax-basic.ts），默认启用
+ * - 基础管线行为拆为 @hyacine/core（breaks/emoji/标题锚点），始终启用
+ * - 用户可写项目插件（注册组件/CSS；mdast/hast 亦可，见 editor/syntax/types.ts）
+ *
  * 依赖跨域隔离（COOP/COEP，见 vite.config + tauri.conf security.headers），
  * 因为 satteri 浏览器端是 WASI 构建、需要 SharedArrayBuffer。
  */
-import noteDirective from "./satteri-plugins/note-directive";
-import codeGroup from "./satteri-plugins/code-group";
-import spanDirective from "./satteri-plugins/span-directive";
-import breaks from "./satteri-plugins/breaks";
-import ins from "./satteri-plugins/ins";
-import rubyDirective from "./satteri-plugins/ruby-directive";
-import spoiler from "./satteri-plugins/spoiler";
-import emoji from "./satteri-plugins/emoji";
-import autolinkHeadings from "./satteri-plugins/autolink-headings";
-
-type Props = Record<string, unknown>;
-type ComponentRenderer = (props: Props) => unknown;
+// oxlint-disable typescript/no-unsafe-type-assertion, typescript/no-base-to-string, eslint/no-underscore-dangle, eslint/no-unused-vars
+import { appendChild, setProps, normalizeChildren } from "./syntax/dom";
+import { coreSyntaxPlugin } from "./syntax/core";
+import { shokaxBasicPlugin } from "./syntax/shokax-basic";
+import type { ComponentRenderer, Props, SyntaxPlugin } from "./syntax/types";
 
 /* ---------------- JSX runtime（构建 DOM） ---------------- */
-
-function flattenChildren(children: unknown[]): unknown[] {
-  const out: unknown[] = [];
-  for (const c of children) {
-    if (Array.isArray(c)) out.push(...flattenChildren(c));
-    else out.push(c);
-  }
-  return out;
-}
-
-function normalizeChildren(p: Props): unknown[] {
-  const children = p.children;
-  if (children === undefined || children === null) return [];
-  return Array.isArray(children) ? flattenChildren(children) : [children];
-}
-
-function appendChild(parent: Node, child: unknown): void {
-  if (child === null || child === undefined || child === false || child === true) return;
-  if (typeof child === "string" || typeof child === "number") {
-    parent.appendChild(document.createTextNode(String(child)));
-  } else if (child instanceof Node) {
-    parent.appendChild(child);
-  }
-}
-
-function setProps(node: Element, p: Props): void {
-  for (const [k, v] of Object.entries(p)) {
-    if (k === "children" || k === "key") continue;
-    if (v === null || v === undefined || v === false) continue;
-    if (k === "className") node.setAttribute("class", String(v));
-    else if (k === "dangerouslySetInnerHTML" && typeof v === "object" && v !== null) {
-      node.innerHTML = String((v as { __html?: unknown }).__html ?? "");
-    } else if (k.startsWith("on") && typeof v === "function") {
-      node.addEventListener(k.slice(2).toLowerCase(), v as EventListener);
-    } else if (typeof v === "object") {
-      node.setAttribute(k, JSON.stringify(v));
-    } else {
-      node.setAttribute(k, String(v));
-    }
-  }
-}
 
 /** evaluate 注入的 jsx/jsxs：类型 → DOM 节点 */
 export function jsx(type: unknown, props: unknown): unknown {
@@ -89,179 +46,44 @@ export const Fragment = (_p: Props = {}): DocumentFragment => {
   return f;
 };
 
-/* ---------------- ShokaX 组件 → DOM（对齐各 .astro 输出） ---------------- */
+/* ---------------- 插件组装 ---------------- */
 
-function wrap<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  p: Props,
-  extra?: (node: HTMLElementTagNameMap[K]) => void,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  if (className.length > 0) node.className = className;
-  extra?.(node);
-  for (const c of normalizeChildren(p)) appendChild(node, c);
-  return node;
+export interface AssembledPreviewPlugins {
+  mdast: NonNullable<SyntaxPlugin["mdast"]>;
+  hast: NonNullable<SyntaxPlugin["hast"]>;
+  components: Record<string, ComponentRenderer>;
+  cssBlocks: string[];
 }
 
-const NOTE_ICONS: Record<string, string> = {
-  default: "i-ri-file-list-3-fill",
-  primary: "i-ri-lightbulb-flash-fill",
-  info: "i-ri-information-fill",
-  success: "i-ri-checkbox-circle-fill",
-  warning: "i-ri-alert-fill",
-  danger: "i-ri-close-circle-fill",
-};
-
-const Note: ComponentRenderer = (p) => {
-  const type = String(p.type ?? "primary");
-  const title = p.title === undefined ? undefined : String(p.title);
-  const icon = p.icon === undefined ? undefined : String(p.icon);
-  const resolvedIcon = icon === "none" ? null : icon ?? NOTE_ICONS[type];
-  const root = document.createElement("div");
-  root.className = `note note-card ${type}`.trim();
-  if (resolvedIcon) {
-    const i = document.createElement("i");
-    i.className = `note-icon ${resolvedIcon}`.trim();
-    root.append(i);
+/**
+ * 把启用插件列表组装成渲染参数（按顺序合并；同名组件后加载覆盖）。
+ * enabled：插件名数组（顺序即优先级，靠前优先）；userPlugins：项目用户插件。
+ */
+export function assemblePreviewPlugins(
+  enabled: string[],
+  userPlugins: SyntaxPlugin[] = [],
+): AssembledPreviewPlugins {
+  const byName = new Map<string, SyntaxPlugin>();
+  for (const p of [coreSyntaxPlugin, shokaxBasicPlugin, ...userPlugins]) {
+    byName.set(p.name, p);
   }
-  const body = document.createElement("div");
-  body.className = "note-body";
-  if (title) {
-    const t = document.createElement("div");
-    t.className = "note-title";
-    t.append(document.createTextNode(title));
-    body.append(t);
+  const order = [
+    ...new Set([coreSyntaxPlugin.name, ...enabled, ...userPlugins.map((p) => p.name)]),
+  ];
+  const mdast: NonNullable<SyntaxPlugin["mdast"]> = [];
+  const hast: NonNullable<SyntaxPlugin["hast"]> = [];
+  const components: Record<string, ComponentRenderer> = {};
+  const cssBlocks: string[] = [];
+  for (const name of order) {
+    const plugin = byName.get(name);
+    if (plugin === undefined) continue;
+    if (plugin.mdast) mdast.push(...plugin.mdast);
+    if (plugin.hast) hast.push(...plugin.hast);
+    if (plugin.components) Object.assign(components, plugin.components);
+    if (plugin.css) cssBlocks.push(plugin.css);
   }
-  const content = document.createElement("div");
-  content.className = "note-content";
-  for (const c of normalizeChildren(p)) appendChild(content, c);
-  body.append(content);
-  root.append(body);
-  return root;
-};
-
-const Label: ComponentRenderer = (p) =>
-  wrap("span", `label ${p.type ?? "primary"}`.trim(), p);
-const Kbd: ComponentRenderer = (p) => wrap("kbd", "kbd", p);
-const Highlight: ComponentRenderer = (p) =>
-  wrap("mark", `highlight ${p.type ?? "primary"}`.trim(), p);
-const Underline: ComponentRenderer = (p) => {
-  const variant = p.variant === undefined || p.variant === "default" ? "" : String(p.variant);
-  return wrap("ins", `underline ${p.type ?? "primary"} ${variant}`.trim(), p);
-};
-const Strike: ComponentRenderer = (p) => wrap("s", `strike ${p.type ?? "primary"}`.trim(), p);
-const Sub: ComponentRenderer = (p) => wrap("sub", "", p);
-const Sup: ComponentRenderer = (p) => wrap("sup", "", p);
-const Ruby: ComponentRenderer = (p) => {
-  const rt = String(p.rt ?? "");
-  const base = p.base === undefined ? null : String(p.base);
-  const fallback = p.fallback !== false;
-  const left = String(p.leftParen ?? "(");
-  const right = String(p.rightParen ?? ")");
-  return wrap(
-    "ruby",
-    "ruby-annotation",
-    base === null ? p : { ...p, children: undefined },
-    (node) => {
-      if (base !== null) node.append(document.createTextNode(base));
-      if (fallback) {
-        const rp1 = document.createElement("rp");
-        rp1.append(document.createTextNode(left));
-        node.append(rp1);
-      }
-      const rtEl = document.createElement("rt");
-      rtEl.append(document.createTextNode(rt));
-      node.append(rtEl);
-      if (fallback) {
-        const rp2 = document.createElement("rp");
-        rp2.append(document.createTextNode(right));
-        node.append(rp2);
-      }
-    },
-  );
-};
-const Text: ComponentRenderer = (p) => wrap("span", `text ${p.type ?? "red"}`.trim(), p);
-const Spoiler: ComponentRenderer = (p) =>
-  wrap("span", "spoiler", p, (node) => {
-    if (p.title !== undefined) node.setAttribute("title", String(p.title));
-  });
-const Collapse: ComponentRenderer = (p) => {
-  const type = p.type === undefined || p.type === "default" ? "" : String(p.type);
-  const title = p.title === undefined ? "折叠内容" : String(p.title);
-  const details = document.createElement("details");
-  details.className = `mdx-collapse ${type}`.trim();
-  if (p.open === true) details.setAttribute("open", "");
-  const summary = document.createElement("summary");
-  summary.className = "mdx-collapse__summary";
-  summary.append(document.createTextNode(title));
-  details.append(summary);
-  const content = document.createElement("div");
-  content.className = "mdx-collapse__content";
-  for (const c of normalizeChildren(p)) appendChild(content, c);
-  details.append(content);
-  return details;
-};
-const Tabs: ComponentRenderer = (p) => wrap("div", "tabs", p);
-const Tab: ComponentRenderer = (p) => wrap("div", "tab", p);
-const Divider: ComponentRenderer = () => {
-  const hr = document.createElement("hr");
-  hr.className = "divider";
-  return hr;
-};
-
-/* Quiz 交互组件：预览按静态结构渲染（对齐 .astro 输出，交互由博客端 client 驱动） */
-const Quiz: ComponentRenderer = (p) =>
-  wrap("div", `quiz-item ${p.type ?? "single"}`.trim(), p, (node) => {
-    node.setAttribute("data-quiz-type", String(p.type ?? "single"));
-  });
-const QuizGroup: ComponentRenderer = (p) => wrap("div", "quiz-group", p);
-const QuizOptions: ComponentRenderer = (p) => wrap("ul", "quiz-options", p);
-const QuizOption: ComponentRenderer = (p) =>
-  wrap("li", "quiz-option", p, (node) => {
-    if (p.correct === true) node.setAttribute("data-correct", "true");
-  });
-const QuizAnswer: ComponentRenderer = (p) => wrap("div", "quiz-answer", p);
-const QuizGap: ComponentRenderer = (p) => {
-  // 博客用 {answer}（children 被忽略），预览保持一致
-  const span = document.createElement("span");
-  span.className = "quiz-gap";
-  span.setAttribute("aria-label", "填空题答案占位");
-  const answer = p.answer === undefined ? "" : String(p.answer);
-  if (answer.length > 0) span.setAttribute("data-answer", answer);
-  span.append(document.createTextNode(answer));
-  return span;
-};
-const QuizMistake: ComponentRenderer = (p) =>
-  wrap("div", "quiz-mistake", p, (node) => {
-    const dt = p.dataType === undefined ? "错题备注" : String(p.dataType);
-    node.setAttribute("data-type", dt);
-  });
-
-export const shokaxComponents: Record<string, ComponentRenderer> = {
-  Note,
-  Label,
-  Kbd,
-  Highlight,
-  Underline,
-  Strike,
-  Sub,
-  Sup,
-  Ruby,
-  Text,
-  Spoiler,
-  Collapse,
-  Tabs,
-  Tab,
-  Divider,
-  Quiz,
-  QuizGroup,
-  QuizOptions,
-  QuizOption,
-  QuizAnswer,
-  QuizGap,
-  QuizMistake,
-};
+  return { mdast, hast, components, cssBlocks };
+}
 
 /* ---------------- 渲染管线 ---------------- */
 
@@ -273,44 +95,42 @@ function loadSatteri(): Promise<typeof import("satteri")> {
 
 const features = { gfm: true, math: true, directive: true };
 
-function mdastPlugins() {
-  return [
-    breaks(),
-    ins(),
-    emoji(),
-    rubyDirective(),
-    noteDirective(),
-    spanDirective(),
-    codeGroup(),
-    spoiler(),
-  ];
-}
-
-function hastPlugins() {
-  return [autolinkHeadings()];
-}
-
 /** 需要按 MDX 处理（evaluate）还是纯 markdown（markdownToHtml） */
 export function needsMdxPipeline(source: string, isMdxFile: boolean): boolean {
   if (isMdxFile) return true;
-  return /(?:\n|^):::{1,3}\w+/.test(source) || /\n<[A-Z][A-Za-z0-9]*\b|^<[A-Z][A-Za-z0-9]*\b/.test(source);
+  return (
+    /(?:\n|^):::{1,3}\w+/.test(source) ||
+    /\n<[A-Z][A-Za-z0-9]*\b|^<[A-Z][A-Za-z0-9]*\b/.test(source)
+  );
+}
+
+export interface RenderPreviewOptions {
+  /** 启用的插件名（决定 shokax-basic 等是否参与；缺省 = ["shokax-basic"]） */
+  enabled?: string[];
+  /** 项目用户插件（非 builtin） */
+  plugins?: SyntaxPlugin[];
 }
 
 /**
  * 渲染 preview。返回一个含渲染内容的 div（含 shiki 高亮后的代码窗）。
  * 仅在浏览器可用（依赖 document）。
  */
-export async function renderPreview(markdown: string, isMdxFile: boolean): Promise<HTMLElement> {
+export async function renderPreview(
+  markdown: string,
+  isMdxFile: boolean,
+  options: RenderPreviewOptions = {},
+): Promise<HTMLElement> {
   const satteri = await loadSatteri();
-  const plugins = mdastPlugins();
-  const hplugins = hastPlugins();
-
+  const assembled = assemblePreviewPlugins(
+    options.enabled ?? DEFAULT_ENABLED,
+    options.plugins ?? [],
+  );
   let root: Node;
   if (needsMdxPipeline(markdown, isMdxFile)) {
     const mod = await satteri.evaluate(markdown, {
       features,
-      mdastPlugins: plugins,
-      hastPlugins: hplugins,
+      mdastPlugins: assembled.mdast,
+      hastPlugins: assembled.hast,
       jsx,
       jsxs,
       Fragment,
@@ -321,12 +141,12 @@ export async function renderPreview(markdown: string, isMdxFile: boolean): Promi
     if (typeof Content !== "function") {
       throw new Error("satteri evaluate 未返回 MDXContent");
     }
-    root = Content({ components: shokaxComponents }) as Node;
+    root = Content({ components: assembled.components }) as Node;
   } else {
     const result = await satteri.markdownToHtml(markdown, {
       features,
-      mdastPlugins: plugins,
-      hastPlugins: hplugins,
+      mdastPlugins: assembled.mdast,
+      hastPlugins: assembled.hast,
     });
     const tpl = document.createElement("template");
     tpl.innerHTML = result.html;
@@ -339,9 +159,23 @@ export async function renderPreview(markdown: string, isMdxFile: boolean): Promi
   } else {
     wrapper.append(String(root));
   }
+
+  // 注入插件 CSS（自带作用域类名；去重）
+  const seen = new Set<string>();
+  for (const css of assembled.cssBlocks) {
+    if (seen.has(css) || css.length === 0) continue;
+    seen.add(css);
+    const style = document.createElement("style");
+    style.setAttribute("data-syntax-plugin", "");
+    style.textContent = css;
+    wrapper.append(style);
+  }
+
   await highlightCodeBlocks(wrapper);
   return wrapper;
 }
+
+const DEFAULT_ENABLED = ["shokax-basic"];
 
 /* ---------------- Shiki 代码高亮（同博客：双主题 + colorized-brackets） ---------------- */
 
