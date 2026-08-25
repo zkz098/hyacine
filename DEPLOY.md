@@ -127,11 +127,14 @@ pnpm --filter @hyacine/api migrate:remote
 # 等价于 wrangler d1 migrations apply DB --remote
 ```
 
-### 3.4 部署 Worker
+> 也可在 Dashboard 的 **D1 → Console** 手动执行 `migrations/*.sql`（一次性建表可用，但**不写入 `d1_migrations` 版本表**，后续与 wrangler 迁移版本管理对不上）。
+
+### 3.4 部署 Worker（一条龙：先迁移，再发布）
 
 ```bash
-cd packages/api
-wrangler deploy
+pnpm --filter @hyacine/api deploy
+# = wrangler d1 migrations apply DB --remote && wrangler deploy
+# （新迁移文件放 packages/api/migrations/，deploy 会自动先把表结构推上去再更新 Worker 代码）
 ```
 
 验证：
