@@ -35,7 +35,7 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       if (existingHash === undefined || existingHash !== post.hash) {
         changedHashes.push(post.hash);
         await c.env.DB.prepare(
-          "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified",
+          "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content",
         )
           .bind(
             post.path,
@@ -47,6 +47,7 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
             post.createdAt,
             post.updatedAt,
             post.lastModified,
+            post.content ?? null,
           )
           .run();
       } else {

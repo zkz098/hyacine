@@ -7,6 +7,10 @@ function fakeIo(files: Record<string, { size: number; mtime: string }>): CloudSy
     async readDirRecursive(dir: string) {
       return entries.filter(([p]) => p.startsWith(`${dir}/`)).map(([p]) => p);
     },
+    async readTextFile(path: string) {
+      const f = files[path];
+      return f === undefined ? null : `---\ntitle: ${path}\n---\nbody`;
+    },
     async statFile(path: string) {
       const f = files[path];
       if (f === undefined) return null;
@@ -62,6 +66,7 @@ describe("buildCloudSyncPayload", () => {
       createdAt: "2026-08-01T00:00:00.000Z",
       updatedAt: "2026-08-01T00:00:00.000Z",
     });
+    expect(payload.posts[0]?.content).toContain("body");
   });
 
   it("扫描资产（路径相对项目根、分类正确、大小来自 stat）", async () => {

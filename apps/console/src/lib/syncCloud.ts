@@ -4,23 +4,19 @@
  *
  * 纯函数化 + IO 注入，便于单元测试（测试传 fake io，不碰 Tauri/真实文件系统）。
  */
-import type {
-  AssetIndexEntry,
-  AssetType,
-  PostIndexEntry,
-  SyncUploadRequest,
-} from "@hyacine/contract";
-import { statFile, readDirRecursive } from "../tauri/bridge";
+import type { AssetIndexEntry, AssetType, SyncPost, SyncUploadRequest } from "@hyacine/contract";
+import { statFile, readDirRecursive, readTextFile } from "../tauri/bridge";
 
 /** 桌面端本地的 IO 边界，构造 payload 时注入（默认走 Tauri bridge） */
 export interface CloudSyncIO {
   readDirRecursive(dir: string): Promise<string[]>;
+  readTextFile(path: string): Promise<string | null>;
   statFile(
     path: string,
   ): Promise<{ size: number; mtime: Date | null; birthtime: Date | null } | null>;
 }
 
-export const defaultCloudSyncIO: CloudSyncIO = { readDirRecursive, statFile };
+export const defaultCloudSyncIO: CloudSyncIO = { readDirRecursive, statFile, readTextFile };
 
 type LocalPostLike = {
   path: string; // 相对 contentDir
@@ -76,20 +72,26 @@ async function scanCloudAssets(
   return entries;
 }
 
-/** 把本地 post 索引映射为 PostIndexEntry（补时间戳：stat mtime，兜底 now） */
+/** 把本地 post 索引映射为 SyncPost（content 可选；时间戳 stat mtime，兜底 now） */
 async function mapPostIndex(
   projectRoot: string,
   contentDir: string,
   posts: LocalPostLike[],
   io: CloudSyncIO,
-): Promise<PostIndexEntry[]> {
-  const out: PostIndexEntry[] = [];
+): Promise<SyncPost[]> {
+  const out: SyncPost[] = [];
   for (const p of posts) {
     const abs = `${projectRoot}/${contentDir}/${p.path}`;
     const s = await io.statFile(abs);
     const now = new Date();
     const updatedAt = s?.mtime ?? now;
     const createdAt = s?.birthtime ?? updatedAt;
+    let content: string | undefined;
+    try {
+      content = (await io.readTextFile(abs)) ?? undefined;
+    } catch {
+      content = undefined;
+    }
     out.push({
       path: p.path,
       slug: p.slug,
@@ -100,6 +102,7 @@ async function mapPostIndex(
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
       lastModified: updatedAt.toISOString(),
+      content,
     });
   }
   return out;

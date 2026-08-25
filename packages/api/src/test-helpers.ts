@@ -11,6 +11,7 @@ interface PostRow {
   created_at: string;
   updated_at: string;
   last_modified: string;
+  content: string | null;
 }
 
 interface AiRow {
@@ -117,11 +118,22 @@ export class FakeD1Database {
     const lower = sql.toLowerCase().trim();
 
     if (lower.startsWith("insert into posts")) {
-      const [path, slug, title, draft, categories, hash, createdAt, updatedAt, lastModified] =
-        params as [string, string, string, number, string, string, string, string, string];
+      // sync 的 INSERT 带列清单（可选 content）；按列名映射避免列序硬编码
+      const columnsMatch = sql.match(/\(([^)]+)\)\s+values/i);
+      const columns =
+        columnsMatch?.[1]?.split(",").map((column) => column.trim().toLowerCase()) ?? [];
+      const path = params[columns.indexOf("path")] as string;
+      const slug = params[columns.indexOf("slug")] as string;
+      const title = params[columns.indexOf("title")] as string;
+      const draft = params[columns.indexOf("draft")] as number;
+      const categories = params[columns.indexOf("categories")] as string;
+      const hash = params[columns.indexOf("hash")] as string;
+      const createdAt = params[columns.indexOf("created_at")] as string;
+      const updatedAt = params[columns.indexOf("updated_at")] as string;
+      const lastModified = params[columns.indexOf("last_modified")] as string;
+      const content = (params[columns.indexOf("content")] as string | null) ?? null;
       const existing = this.posts.get(path);
       if (existing !== undefined) {
-        // ON CONFLICT DO UPDATE
         existing.slug = slug;
         existing.title = title;
         existing.draft = draft;
@@ -129,6 +141,7 @@ export class FakeD1Database {
         existing.hash = hash;
         existing.updated_at = updatedAt;
         existing.last_modified = lastModified;
+        if (content !== null) existing.content = content;
       } else {
         this.posts.set(path, {
           path,
@@ -140,6 +153,7 @@ export class FakeD1Database {
           created_at: createdAt,
           updated_at: updatedAt,
           last_modified: lastModified,
+          content,
         });
       }
       return;
@@ -328,9 +342,7 @@ export class FakeD1Database {
       } else if (lower.includes("token_hash >=")) {
         // 前缀范围查询（revoke 用）：token_hash >= id AND token_hash < id+\uffff
         const [id] = params as [string];
-        rows = rows.filter(
-          (row) => row.token_hash >= id && row.token_hash < `${id}\uffff`,
-        );
+        rows = rows.filter((row) => row.token_hash >= id && row.token_hash < `${id}\uffff`);
       }
       // Order by created_at DESC for list
       if (lower.includes("order by created_at desc")) {

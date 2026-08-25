@@ -362,6 +362,70 @@ describe("sync", () => {
     const json = (await logRes.json()) as { entries: unknown[] };
     expect(json.entries.length).toBeGreaterThan(0);
   });
+
+  it("带 content 的同步把正文落 D1（P0 content 落库）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    const hash = "b".repeat(16);
+    const body = `---\ntitle: Content\n---\n\nHello body text.`;
+    const response = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "content.md",
+            slug: "content",
+            title: "Content",
+            draft: false,
+            categories: [],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            content: body,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(response.status).toBe(200);
+    const db = getFakeD1(env);
+    const row = db.posts.get("content.md");
+    expect(row?.content).toBe(body);
+    // 不带 content 的同步不覆盖已有正文（content 列保留）
+    const again = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "content.md",
+            slug: "content",
+            title: "Content",
+            draft: false,
+            categories: [],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(again.status).toBe(200);
+    expect(db.posts.get("content.md")?.content).toBe(body);
+  });
 });
 
 describe("ai", () => {
@@ -854,10 +918,10 @@ describe("admin config (dynamic)", () => {
       token,
     );
     expect(put.status).toBe(200);
-    const after = ((await put.json()) as {
+    const after = (await put.json()) as {
       aiSummary: { model: string; key: { set: boolean } };
       embedModel: string;
-    });
+    };
     expect(after.aiSummary.model).toBe("dyn-model");
     expect(after.embedModel).toBe("@cf/baai/bge-m3");
     // endpoint 未提供 → 保持 env 默认

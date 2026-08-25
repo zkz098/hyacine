@@ -3,10 +3,17 @@ import { AssetIndexEntrySchema } from "./asset";
 import { HashSchema, IsoDateSchema, PostPathSchema } from "./common";
 import { PostIndexEntrySchema } from "./post";
 
+/** 同步上行条目：索引 + 可选正文（带 content 时 API 落 posts.content，解锁自动 AI/Primary） */
+export const SyncPostSchema = PostIndexEntrySchema.extend({
+  content: z.string().min(1).optional(),
+});
+
+export type SyncPost = z.infer<typeof SyncPostSchema>;
+
 /** 索引上行（全量快照，server 按 hash diff） */
 export const SyncUploadRequestSchema = z.object({
   generatedAt: IsoDateSchema,
-  posts: z.array(PostIndexEntrySchema),
+  posts: z.array(SyncPostSchema),
   assets: z.array(AssetIndexEntrySchema),
   /** 本地已删除（相对上次上行的存量） */
   deletedPaths: z.array(z.string().min(1)).default([]),

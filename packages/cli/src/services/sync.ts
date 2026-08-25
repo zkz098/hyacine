@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { scanPosts } from "./posts";
 import type { ProjectConfig } from "../config/project";
@@ -59,12 +59,23 @@ export function buildSyncPayload(
   const posts = scanPosts(projectRoot, config);
   const assets = scanAssets(projectRoot, config);
   const currentPaths = posts.map((p) => p.path);
+  // 携带正文：API 落 posts.content，解锁服务端自动 AI / Primary 远程编辑（P0）
+  const postsWithContent = posts.map((p) => {
+    const full = join(projectRoot, config.contentDir, p.path);
+    let content: string | undefined;
+    try {
+      content = readFileSync(full, "utf8");
+    } catch {
+      content = undefined;
+    }
+    return { ...p, content };
+  });
   let deletedPaths: string[] = [];
   if (lastPaths !== null) {
     const currentSet = new Set(currentPaths);
     deletedPaths = lastPaths.filter((p) => !currentSet.has(p));
   }
-  return { posts, assets, deletedPaths };
+  return { posts: postsWithContent, assets, deletedPaths };
 }
 
 export function chunkText(text: string, maxChars = 800): string[] {
