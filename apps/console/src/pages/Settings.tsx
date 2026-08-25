@@ -298,27 +298,6 @@ export function Settings(): import("solid-js").JSX.Element {
             <div class="flex flex-col gap-3">
               <div class="flex flex-col gap-2">
                 <h3 class="text-xs text-muted">{t("settings.cloud.ai")}</h3>
-                <input
-                  value={cloudForm().aiEndpoint}
-                  onInput={(e) => setField("aiEndpoint", e.currentTarget.value)}
-                  placeholder={t("settings.cloud.ai.endpoint")}
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                />
-                <div class="flex gap-2">
-                  <input
-                    value={cloudForm().aiModel}
-                    onInput={(e) => setField("aiModel", e.currentTarget.value)}
-                    placeholder={t("settings.cloud.ai.model")}
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                  />
-                  <input
-                    value={cloudForm().aiKey}
-                    onInput={(e) => setField("aiKey", e.currentTarget.value)}
-                    type="password"
-                    placeholder={`${t("settings.cloud.ai.key")}（${cloudKeySet().aiKey ? t("settings.cloud.keySet") : t("settings.cloud.keyUnset")}）`}
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                  />
-                </div>
                 <div class="flex items-center gap-3 text-sm">
                   <label class="flex items-center gap-1">
                     <span class="text-muted">{t("settings.cloud.ai.provider")}</span>
@@ -343,6 +322,32 @@ export function Settings(): import("solid-js").JSX.Element {
                     {t("settings.cloud.ai.autogen")}
                   </label>
                 </div>
+                {/* BYOK 专属：endpoint + key；Workers AI 只配模型名 */}
+                <Show when={cloudForm().aiProvider === "byok"}>
+                  <input
+                    value={cloudForm().aiEndpoint}
+                    onInput={(e) => setField("aiEndpoint", e.currentTarget.value)}
+                    placeholder={t("settings.cloud.ai.endpoint")}
+                    class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  />
+                  <input
+                    value={cloudForm().aiKey}
+                    onInput={(e) => setField("aiKey", e.currentTarget.value)}
+                    type="password"
+                    placeholder={`${t("settings.cloud.ai.key")}（${cloudKeySet().aiKey ? t("settings.cloud.keySet") : t("settings.cloud.keyUnset")}）`}
+                    class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  />
+                </Show>
+                <input
+                  value={cloudForm().aiModel}
+                  onInput={(e) => setField("aiModel", e.currentTarget.value)}
+                  placeholder={
+                    cloudForm().aiProvider === "workers-ai"
+                      ? t("settings.cloud.ai.modelWorkers")
+                      : t("settings.cloud.ai.model")
+                  }
+                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                />
               </div>
 
               <div class="flex flex-col gap-2">

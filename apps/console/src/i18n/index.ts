@@ -84,6 +84,7 @@ const zhCN: Record<string, string> = {
   "settings.cloud.ai.key": "API Key（留空保持不变）",
   "settings.cloud.ai.provider": "摘要提供方",
   "settings.cloud.ai.autogen": "自动生成摘要（新/变更文章）",
+  "settings.cloud.ai.modelWorkers": "Workers AI 模型 id（如 @cf/meta/llama-3.2-3b-instruct）",
   "settings.cloud.embedModel": "嵌入模型（Workers AI）",
   "settings.cloud.embedAutogen": "自动生成嵌入（新/变更文章，额度耗尽次日重试）",
   "settings.cloud.r2": "R2（可选，资产直传）",
