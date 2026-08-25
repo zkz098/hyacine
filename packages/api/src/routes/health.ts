@@ -1,19 +1,17 @@
 import { Hono } from "hono";
+import { loadEffectiveConfig } from "../utils/config";
 import type { Env, Variables } from "../types";
 
 export function healthRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
-  app.get("/api/health", (c) => {
-    const needsSetup = c.env.SETUP_CODE === undefined || c.env.SETUP_CODE.length === 0;
+  app.get("/api/health", async (c) => {
+    const cfg = await loadEffectiveConfig(c.env);
+    const needsSetup = (c.env.SETUP_CODE ?? "").length === 0;
     const hasSummary =
-      c.env.AI_SUMMARY_ENDPOINT !== undefined &&
-      c.env.AI_SUMMARY_ENDPOINT.length > 0 &&
-      c.env.AI_SUMMARY_KEY !== undefined &&
-      c.env.AI_SUMMARY_KEY.length > 0 &&
-      c.env.AI_SUMMARY_MODEL !== undefined &&
-      c.env.AI_SUMMARY_MODEL.length > 0;
-    // embed 实际依赖 AI binding（routes/ai.ts 里 env.AI === undefined → 503），
-    // 只查 EMBED_MODEL 会误报；运行时未绑定 AI 时 env.AI 为 undefined
-    const hasEmbed = c.env.AI !== undefined && (c.env.EMBED_MODEL ?? "").length > 0;
+      cfg.aiSummary.endpoint.length > 0 &&
+      cfg.aiSummary.key.length > 0 &&
+      cfg.aiSummary.model.length > 0;
+    // embed 依赖 AI binding（env.AI === undefined 判定）+ 配置的嵌入模型
+    const hasEmbed = c.env.AI !== undefined && cfg.embedModel.length > 0;
 
     return c.json({
       ok: true as const,

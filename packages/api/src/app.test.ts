@@ -802,3 +802,113 @@ describe("utils", () => {
     ).toEqual([2, 3]);
   });
 });
+
+describe("admin config (dynamic)", () => {
+  it("GET 需要 admin 权限（无 token 401 / 普通 token 403）", async () => {
+    const env = createTestEnv();
+    expect((await request(env, "GET", "/api/admin/config")).status).toBe(401);
+    const token = await setupAdminToken(env);
+    // 创建 posts.r 子 token 验证 403
+    const create = await request(
+      env,
+      "POST",
+      "/api/auth/tokens",
+      { label: "reader", scopes: ["posts.r"], expiresInDays: null },
+      token,
+    );
+    const reader = ((await create.json()) as { token: string }).token;
+    expect((await request(env, "GET", "/api/admin/config", undefined, reader)).status).toBe(403);
+  });
+
+  it("GET 返回 env 默认值 + 敏感项只回 set 标志", async () => {
+    const env = createTestEnv({
+      AI_SUMMARY_ENDPOINT: "https://api.example.com/v1/chat/completions",
+      AI_SUMMARY_KEY: "sk-env",
+      AI_SUMMARY_MODEL: "gpt-x",
+      EMBED_MODEL: "@cf/baai/bge-m3",
+    });
+    const token = await setupAdminToken(env);
+    const res = await request(env, "GET", "/api/admin/config", undefined, token);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      aiSummary: { endpoint: string; key: { set: boolean }; model: string };
+      embedModel: string;
+    };
+    expect(json.aiSummary.endpoint).toBe("https://api.example.com/v1/chat/completions");
+    expect(json.aiSummary.key).toEqual({ set: true }); // 不回明文
+    expect(json.aiSummary.model).toBe("gpt-x");
+    expect(json.embedModel).toBe("@cf/baai/bge-m3");
+  });
+
+  it("PUT 设置 → GET 反映覆盖；敏感值不回显、空串清除回退 env", async () => {
+    const env = createTestEnv({
+      AI_SUMMARY_ENDPOINT: "https://env.example.com/v1/chat/completions",
+      AI_SUMMARY_MODEL: "env-model",
+    });
+    const token = await setupAdminToken(env);
+    const put = await request(
+      env,
+      "PUT",
+      "/api/admin/config",
+      { embedModel: "@cf/baai/bge-m3", aiSummary: { model: "dyn-model" } },
+      token,
+    );
+    expect(put.status).toBe(200);
+    const after = ((await put.json()) as {
+      aiSummary: { model: string; key: { set: boolean } };
+      embedModel: string;
+    });
+    expect(after.aiSummary.model).toBe("dyn-model");
+    expect(after.embedModel).toBe("@cf/baai/bge-m3");
+    // endpoint 未提供 → 保持 env 默认
+    expect(after.aiSummary.key).toEqual({ set: false });
+
+    const get = await request(env, "GET", "/api/admin/config", undefined, token);
+    const got = (await get.json()) as { aiSummary: { model: string } };
+    expect(got.aiSummary.model).toBe("dyn-model");
+
+    // 清空 embedModel → 回退 env 默认（createTestEnv 默认 @cf/baai/bge-m3）
+    const clear = await request(env, "PUT", "/api/admin/config", { embedModel: "" }, token);
+    const cleared = ((await clear.json()) as { embedModel: string }).embedModel;
+    expect(cleared).toBe("@cf/baai/bge-m3");
+  });
+
+  it("PUT 校验：未知键/超长被拒", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    expect(
+      (await request(env, "PUT", "/api/admin/config", { unknownKey: "x" }, token)).status,
+    ).toBe(400);
+    expect(
+      (await request(env, "PUT", "/api/admin/config", { embedModel: "x".repeat(200) }, token))
+        .status,
+    ).toBe(400);
+  });
+
+  it("动态配置影响 health 探测（无需 redeploy）", async () => {
+    const env = createTestEnv(); // 默认无 AI env
+    const token = await setupAdminToken(env);
+    const before = (await (await request(env, "GET", "/api/health")).json()) as {
+      ai: { summary: boolean };
+    };
+    expect(before.ai.summary).toBe(false);
+    const put = await request(
+      env,
+      "PUT",
+      "/api/admin/config",
+      {
+        aiSummary: {
+          endpoint: "https://api.example.com/v1/chat/completions",
+          key: "sk-dyn",
+          model: "gpt-dyn",
+        },
+      },
+      token,
+    );
+    expect(put.status).toBe(200);
+    const after = (await (await request(env, "GET", "/api/health")).json()) as {
+      ai: { summary: boolean };
+    };
+    expect(after.ai.summary).toBe(true);
+  });
+});

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { healthRoutes } from "./routes/health";
+import { configRoutes } from "./routes/config";
 import { authRoutes } from "./routes/auth";
 import { syncRoutes } from "./routes/sync";
 import { aiRoutes } from "./routes/ai";
@@ -30,6 +31,7 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
   app.notFound((c) => c.json(errorBody("not_found", "未找到"), 404));
 
   healthRoutes(app);
+  configRoutes(app);
   authRoutes(app);
   syncRoutes(app);
   aiRoutes(app);

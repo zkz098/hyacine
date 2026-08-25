@@ -9,6 +9,7 @@ import {
 import { cosine, meanPool, stripFrontmatter } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
 import { defer } from "../utils/defer";
+import { loadEffectiveConfig } from "../utils/config";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
@@ -22,9 +23,10 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
 
     const { hash, content, model } = parsed.data;
 
-    const endpoint = c.env.AI_SUMMARY_ENDPOINT;
-    const key = c.env.AI_SUMMARY_KEY;
-    const configuredModel = c.env.AI_SUMMARY_MODEL;
+    const cfg = await loadEffectiveConfig(c.env);
+    const endpoint = cfg.aiSummary.endpoint;
+    const key = cfg.aiSummary.key;
+    const configuredModel = cfg.aiSummary.model;
     const usedModel = model ?? configuredModel ?? "unknown";
 
     // KV cache check: try D1 first
@@ -141,7 +143,8 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     }
 
     const { hash, chunks } = parsed.data;
-    const model = parsed.data.model ?? c.env.EMBED_MODEL ?? "@cf/baai/bge-m3";
+    const cfg = await loadEffectiveConfig(c.env);
+    const model = parsed.data.model ?? (cfg.embedModel || "@cf/baai/bge-m3");
 
     // Check if AI binding exists
     if (c.env.AI === undefined) {

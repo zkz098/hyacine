@@ -1,15 +1,10 @@
 import { createSignal } from "solid-js";
 import { parse as yamlParse } from "yaml";
+import { DEFAULT_PROJECT_CONFIG, parseProjectConfig, type ProjectConfig } from "@hyacine/contract";
 import { displaySlug } from "@hyacine/contract";
 import { isTauri, readDirRecursive, readTextFile } from "../tauri/bridge";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
-
-export interface ProjectConfig {
-  contentDir: string;
-  assetsDir: string;
-  postExtension: string[];
-}
 
 export interface LocalPostInfo {
   path: string; // 相对 contentDir 的路径，如 "hello.md"
@@ -29,34 +24,20 @@ const [posts, setPosts] = createSignal<LocalPostInfo[]>([]);
 const [loading, setLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
 
-function defaultConfig(): ProjectConfig {
-  return { contentDir: "src/posts", assetsDir: "src/assets", postExtension: [".md", ".mdx"] };
-}
-
 async function loadConfig(dir: string): Promise<ProjectConfig> {
   const candidates = [`${dir}/hyacine.yml`, `${dir}/hyacine.yaml`];
   for (const p of candidates) {
     try {
       const raw = await readTextFile(p);
+      // 解析校验统一走 contract 共享 schema（与 CLI 一致）
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- yaml parse returns any
-      const parsed = yamlParse(raw) as Record<string, unknown>;
-      const contentDir =
-        typeof parsed.contentDir === "string" ? parsed.contentDir : defaultConfig().contentDir;
-      const assetsDir =
-        typeof parsed.assetsDir === "string" ? parsed.assetsDir : defaultConfig().assetsDir;
-      const postExtension =
-        Array.isArray(parsed.postExtension) &&
-        parsed.postExtension.every((x) => typeof x === "string")
-          ? (parsed.postExtension as string[])
-          : defaultConfig().postExtension;
-      return { contentDir, assetsDir, postExtension };
+      return parseProjectConfig(yamlParse(raw) as unknown);
     } catch {
       // try next
     }
   }
-  return defaultConfig();
+  return { ...DEFAULT_PROJECT_CONFIG };
 }
-
 function extractTitle(data: Record<string, unknown>, fallback: string): string {
   const t = data.title;
   if (typeof t === "string" && t.length > 0) return t;
@@ -130,7 +111,9 @@ export async function refreshPosts(): Promise<void> {
     } else if (mdFiles.length === 0) {
       setError(`在 ${contentAbs} 下未发现任何 .md/.mdx 文件（readDir 返回 ${files.length} 项）`);
     } else if (fileErrors.length > 0) {
-      setError(`扫描到 ${mdFiles.length} 个文件但读取全部失败，前几个错误：${fileErrors.join(" | ")}`);
+      setError(
+        `扫描到 ${mdFiles.length} 个文件但读取全部失败，前几个错误：${fileErrors.join(" | ")}`,
+      );
     }
   } catch (err: unknown) {
     setError(err instanceof Error ? err.message : String(err));

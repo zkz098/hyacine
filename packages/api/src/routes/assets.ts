@@ -5,6 +5,7 @@ import {
   RegisterAssetRequestSchema,
 } from "@hyacine/contract";
 import { errorBody } from "../utils/errors";
+import { loadEffectiveConfig } from "../utils/config";
 import { createPresignedPutUrl } from "../utils/presign";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
@@ -19,10 +20,11 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
 
     const { key, contentType } = parsed.data;
 
-    const endpoint = c.env.R2_S3_ENDPOINT;
-    const accessKeyId = c.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = c.env.R2_SECRET_ACCESS_KEY;
-    const bucket = c.env.R2_BUCKET;
+    const cfg = await loadEffectiveConfig(c.env);
+    const endpoint = cfg.r2.endpoint;
+    const accessKeyId = cfg.r2.accessKeyId;
+    const secretAccessKey = cfg.r2.secretAccessKey;
+    const bucket = cfg.r2.bucket;
 
     if (
       endpoint === undefined ||

@@ -92,6 +92,7 @@ export class FakeD1Database {
   aiResults = new Map<string, AiRow>();
   assets = new Map<string, AssetRow>();
   tokens = new Map<string, TokenRow>();
+  appConfig = new Map<string, string>();
   syncLogs: SyncLogRow[] = [];
   nextSyncLogId = 1;
 
@@ -221,6 +222,18 @@ export class FakeD1Database {
       return;
     }
 
+    if (lower.startsWith("insert into app_config")) {
+      const [key, value] = params as [string, string];
+      this.appConfig.set(key, value);
+      return;
+    }
+
+    if (lower.startsWith("delete from app_config")) {
+      const [key] = params as [string];
+      this.appConfig.delete(key);
+      return;
+    }
+
     if (lower.startsWith("insert into api_tokens")) {
       const [tokenHash, label, scopes, expiresAt, lastUsedAt, createdAt, revoked] = params as [
         string,
@@ -299,6 +312,11 @@ export class FakeD1Database {
 
     if (lower.includes("from assets")) {
       const rows = [...this.assets.values()];
+      return rows as unknown as T[];
+    }
+
+    if (lower.includes("from app_config")) {
+      const rows = [...this.appConfig.entries()].map(([key, value]) => ({ key, value }));
       return rows as unknown as T[];
     }
 

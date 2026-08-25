@@ -1,13 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-
-export interface ProjectConfig {
-  contentDir: string;
-  assetsDir: string;
-  postExtension: string[];
-  themeConfigPath: string | null;
-}
+import { parseProjectConfig, type ProjectConfig } from "@hyacine/contract";
 
 const DEFAULT_CONFIG: ProjectConfig = {
   contentDir: "src/posts",
@@ -43,16 +37,10 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   else return { ...DEFAULT_CONFIG };
 
   try {
+    // 解析与校验统一走 contract 的共享 schema（CLI/桌面/API 一致）
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- yaml parse returns any
-    const parsed = parseYaml(raw) as Record<string, unknown>;
-    const cfg: ProjectConfig = { ...DEFAULT_CONFIG };
-    if (typeof parsed.contentDir === "string") cfg.contentDir = parsed.contentDir;
-    if (typeof parsed.assetsDir === "string") cfg.assetsDir = parsed.assetsDir;
-    if (Array.isArray(parsed.postExtension)) {
-      cfg.postExtension = parsed.postExtension.filter((x): x is string => typeof x === "string");
-    }
-    if (typeof parsed.themeConfigPath === "string") cfg.themeConfigPath = parsed.themeConfigPath;
-    return cfg;
+    const parsed = parseYaml(raw) as unknown;
+    return parseProjectConfig(parsed);
   } catch {
     return { ...DEFAULT_CONFIG };
   }
@@ -65,3 +53,5 @@ export function resolveProjectConfig(
   if (root === null) return null;
   return { root, config: loadProjectConfig(root) };
 }
+
+export type { ProjectConfig }; // 重导出共享类型，cli 内引用不变

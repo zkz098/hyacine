@@ -210,6 +210,23 @@ curl -X POST https://<worker>/api/auth/setup \
 - ⚠️ 换模型 = 旧向量作废（`ai_results` 按 `embed_model` 区分）；`ai/similar` 全表扫有向量行，不建议混模型
 - 验证：health `ai.embed:true`；`hyc ai:embed` 生成（`hyc sync` 返回的 `ai.needs` 会提示缺哪些 hash 的 summary/embed）
 
+### 3.8 动态配置（管理台可视化管理，免 redeploy）
+
+部署后除了 env/secret，还可以在**管理台 → 设置（登录后）**直接改 AI/R2 配置，即时生效：
+
+- 存储：D1 `app_config` 表（migration 0002，`deploy` 一条龙已自动应用）
+- 生效顺序：**env 默认值 → D1 覆盖**；读取带 KV 缓存（`app:config:v1`，60s TTL，写入即失效）
+- 接口：`GET/PUT /api/admin/config`（**admin scope**）；敏感值（AI Key / R2 Secret）只回显 `{set:true}` 不回明文，PUT 时留空=保持不变、空串=清除（回退 env）
+- 覆盖范围：`aiSummary.endpoint/key/model`、`embedModel`、`r2.endpoint/accessKeyId/secretAccessKey/bucket`（与 health/ai/assets 路由全部联动）
+- 用 CLI 管理（等价）：
+
+```bash
+# 先用 admin token 换请求头（SETUP_CODE → /api/auth/setup）
+curl -X PUT https://<worker>/api/admin/config \
+  -H "authorization: Bearer <admin-token>" -H "content-type: application/json" \
+  -d '{"embedModel":"@cf/baai/bge-m3","aiSummary":{"model":"gpt-4o-mini"}}'
+```
+
 ---
 
 ## 4. CLI

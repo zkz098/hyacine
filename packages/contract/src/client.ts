@@ -27,6 +27,7 @@ import {
   TokenListResponseSchema,
   TokenRevokeResponseSchema,
 } from "./schemas/auth";
+import { ConfigUpdateRequestSchema, EffectiveConfigSchema } from "./schemas/config";
 import { StatsResponseSchema } from "./schemas/stats";
 import { PostsListResponseSchema } from "./schemas/post";
 import {
@@ -135,6 +136,24 @@ export class HyacineClient {
 
   async syncLog(): Promise<z.infer<typeof SyncLogResponseSchema>> {
     return this.#request(SyncLogResponseSchema, "GET", "/api/sync/log");
+  }
+
+  // ---- config（服务级动态配置，admin） -----------------------------------
+
+  async getConfig(): Promise<z.infer<typeof EffectiveConfigSchema>> {
+    return this.#request(EffectiveConfigSchema, "GET", "/api/admin/config");
+  }
+
+  async updateConfig(
+    req: z.infer<typeof ConfigUpdateRequestSchema>,
+  ): Promise<z.infer<typeof EffectiveConfigSchema>> {
+    return this.#request(
+      EffectiveConfigSchema,
+      "PUT",
+      "/api/admin/config",
+      req,
+      ConfigUpdateRequestSchema,
+    );
   }
 
   // ---- posts 查询 -------------------------------------------------------
