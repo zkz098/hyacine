@@ -18,6 +18,25 @@ export function Sync(): import("solid-js").JSX.Element {
   const [syncing, setSyncing] = createSignal(false);
   const [syncError, setSyncError] = createSignal<string | null>(null);
   const [lastResult, setLastResult] = createSignal<SyncUploadResponse | null>(null);
+  const [exporting, setExporting] = createSignal(false);
+  const [exportMsg, setExportMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const handleExport = async (): Promise<void> => {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const res = await apiStore.getClient().triggerExport();
+      if (res.dispatched) {
+        setExportMsg({ kind: "ok", text: `已触发 Git 导出 → ${res.repo ?? ""}` });
+      } else {
+        setExportMsg({ kind: "err", text: res.error ?? "导出失败" });
+      }
+    } catch (err: unknown) {
+      setExportMsg({ kind: "err", text: messageOf(err) });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSyncCloud = async (): Promise<void> => {
     setSyncing(true);
@@ -64,6 +83,16 @@ export function Sync(): import("solid-js").JSX.Element {
           </button>
           <button
             type="button"
+            disabled={exporting()}
+            onClick={() => void handleExport()}
+            title="Primary 模式：触发 GitHub Action 把 D1 导出到博客仓库"
+            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm disabled:opacity-50"
+          >
+            <span class="i-ri-git-branch-line mr-1" />
+            {exporting() ? t("sync.exporting") : t("sync.exportNow")}
+          </button>
+          <button
+            type="button"
             onClick={() => void refetch()}
             class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
           >
@@ -77,6 +106,10 @@ export function Sync(): import("solid-js").JSX.Element {
 
       <Show when={syncError()}>
         <Alert variant="error">{syncError()}</Alert>
+      </Show>
+
+      <Show when={exportMsg()}>
+        {(m) => <Alert variant={m().kind === "ok" ? "success" : "error"}>{m().text}</Alert>}
       </Show>
 
       <Show when={lastResult()}>

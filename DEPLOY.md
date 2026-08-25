@@ -244,6 +244,18 @@ curl -X PUT https://<worker>/api/admin/config \
 
 ---
 
+### 3.10 Primary 模式：D1 与 Git 双真相源（远程编辑/远程配置）
+
+默认 Replica 模式（本地 git 真相源 → 同步上行索引）。开启 Primary 后，D1 里的文章可直接远程编辑并**自动落回博客仓库 git**（触发线上构建）：
+
+1. **配置 GitHub**：管理台 → 设置 → 云端配置 → `Primary（GitHub 桥）`：仓库 Owner / 仓库名 / PAT（需 `repo` scope，仅用于 repository_dispatch）。对应 `github.repoOwner/repoName/token`。
+2. **安装桥 workflow**：把 `packages/api/workflows/hyacine-bridge.yml` 复制到博客仓库 `.github/workflows/`，并配 GitHub Actions Secrets：`HYACINE_API_URL`（Worker 地址）、`HYACINE_TOKEN`（带 posts.w/r 的 hyacine token）。
+3. **远程编辑**：管理台 Posts 页 →「远程编辑」→ 改正文 → 保存 → API 解析 frontmatter/hash 落 D1（联动自动 AI）→ 自动 `repository_dispatch('hyacine:export')` → workflow 拉 `/api/export` 全量快照写文件 → `hyacine:sync` commit（`GITHUB_TOKEN` 提交不回环）→ push 触发博客构建。
+4. **git → D1**：main 分支普通 push → workflow import job 收集变更 `.md/.mdx` → `POST /api/posts` 上传 → API 解析落 D1。
+5. **手动导出**：管理台 Sync 页「导出到 Git」→ `POST /api/export/trigger`。
+
+> **冲突语义**：双真相源 = 最后写入者胜（`updated_at`/提交时间）。**避免两端同时编辑同一文件**；导出为全量覆盖（`git add -A` 提交，已删文章随之移除）。
+
 ## 4. CLI
 
 ### 4.1 构建与安装

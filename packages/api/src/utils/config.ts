@@ -78,6 +78,11 @@ export function effectiveConfig(env: Env, overrides: Record<string, string>): Cl
     },
     embedModel: overrides["embedModel"] ?? env.EMBED_MODEL ?? "",
     embedAutogen: parseBool(overrides["embedAutogen"], false),
+    github: {
+      repoOwner: overrides["github.repoOwner"] ?? "",
+      repoName: overrides["github.repoName"] ?? "",
+      token: overrides["github.token"] ?? "",
+    },
     r2: {
       endpoint: overrides["r2.endpoint"] ?? env.R2_S3_ENDPOINT ?? "",
       accessKeyId: overrides["r2.accessKeyId"] ?? env.R2_ACCESS_KEY_ID ?? "",

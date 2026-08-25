@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth";
 import { syncRoutes } from "./routes/sync";
 import { aiRoutes } from "./routes/ai";
 import { assetsRoutes } from "./routes/assets";
+import { remoteRoutes } from "./routes/remote";
 import { statsRoutes } from "./routes/stats";
 import { postsRoutes } from "./routes/posts";
 import { errorBody } from "./utils/errors";
@@ -36,6 +37,7 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
   syncRoutes(app);
   aiRoutes(app);
   assetsRoutes(app);
+  remoteRoutes(app);
   postsRoutes(app);
   statsRoutes(app);
 

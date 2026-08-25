@@ -18,6 +18,11 @@ function toEffective(cfg: ReturnType<typeof effectiveConfig>): EffectiveConfig {
     },
     embedModel: cfg.embedModel,
     embedAutogen: cfg.embedAutogen,
+    github: {
+      repoOwner: cfg.github.repoOwner,
+      repoName: cfg.github.repoName,
+      token: { set: cfg.github.token.length > 0 },
+    },
     r2: {
       endpoint: cfg.r2.endpoint,
       accessKeyId: cfg.r2.accessKeyId,
@@ -60,6 +65,12 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       "embedAutogen",
       update.embedAutogen === undefined ? undefined : String(update.embedAutogen),
     ]);
+    const github = update.github;
+    if (github !== undefined) {
+      pairs.push(["github.repoOwner", github.repoOwner]);
+      pairs.push(["github.repoName", github.repoName]);
+      pairs.push(["github.token", github.token]);
+    }
     const r2 = update.r2;
     if (r2 !== undefined) {
       pairs.push(["r2.endpoint", r2.endpoint]);

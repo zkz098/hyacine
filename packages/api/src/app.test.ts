@@ -1052,3 +1052,168 @@ describe("admin config (dynamic)", () => {
     expect(get.embedAutogen).toBe(true);
   });
 });
+
+describe("Primary 模式（远程编辑 / 导出）", () => {
+  it("POST /api/posts 解析 frontmatter+hash 并落库", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const content = `---\ntitle: Remote Post\nslug: remote-post\ndraft: false\ncategories: [tech, ai]\n---\n\nBody for remote post.`;
+    const res = await request(env, "POST", "/api/posts", { path: "sub/remote.md", content }, token);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      slug: string;
+      title: string;
+      draft: boolean;
+      categories: string[];
+      hash: string;
+      changed: boolean;
+      dispatched: boolean;
+    };
+    expect(json.title).toBe("Remote Post");
+    expect(json.slug).toBe("remote-post");
+    expect(json.categories).toEqual(["tech", "ai"]);
+    expect(json.changed).toBe(true);
+    expect(json.hash).toMatch(/^[0-9a-f]{16}$/);
+    expect(json.dispatched).toBe(false); // github 未配置
+    const db = getFakeD1(env);
+    expect(db.posts.get("sub/remote.md")?.content).toBe(content);
+
+    // 同内容再传 → changed=false
+    const again = await request(
+      env,
+      "POST",
+      "/api/posts",
+      { path: "sub/remote.md", content },
+      token,
+    );
+    expect(((await again.json()) as { changed: boolean }).changed).toBe(false);
+  });
+
+  it("正文 hash 变化删除旧 AI 产物并联动 autogen 入队", async () => {
+    const env = createTestEnv();
+    const db = getFakeD1(env);
+    const token = await setupAdminToken(env);
+    db.aiResults.set("old".repeat(4), {
+      hash: "oldoldoldold",
+      summary: "old",
+      summary_model: "m",
+      summary_at: "2026-08-01T00:00:00.000Z",
+      embed_model: null,
+      embed_dim: null,
+      embed_at: null,
+      embed_vec: null,
+      embed_chunks: null,
+    });
+    const v1 = `---\ntitle: T\n---\n\nVersion one body.`;
+    const v2 = `---\ntitle: T\n---\n\nVersion two body.`;
+    const first = await request(env, "POST", "/api/posts", { path: "v.md", content: v1 }, token);
+    const h1 = ((await first.json()) as { hash: string }).hash;
+    const second = await request(env, "POST", "/api/posts", { path: "v.md", content: v2 }, token);
+    const h2 = ((await second.json()) as { hash: string }).hash;
+    expect(h1).not.toBe(h2);
+  });
+
+  it("GET /api/posts/content 读取正文（query 传 path，支持子目录）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const content = `---\ntitle: Sub\n---\n\nSub body.`;
+    await request(env, "POST", "/api/posts", { path: "notes/deep/a.md", content }, token);
+    const res = await request(
+      env,
+      "GET",
+      "/api/posts/content?path=notes%2Fdeep%2Fa.md",
+      undefined,
+      token,
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { content: string }).content).toBe(content);
+    // 404
+    const miss = await request(env, "GET", "/api/posts/content?path=nope.md", undefined, token);
+    expect(miss.status).toBe(404);
+  });
+
+  it("GET /api/export 返回全量快照（只含有正文的行）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    const syncRes = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "exp.md",
+            slug: "exp",
+            title: "Exp",
+            draft: false,
+            categories: [],
+            hash: "e".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            content: "---\ntitle: Exp\n---\n\nExported body.",
+          },
+          {
+            path: "no-content.md",
+            slug: "nc",
+            title: "NC",
+            draft: false,
+            categories: [],
+            hash: "d".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(syncRes.status).toBe(200);
+    const res = await request(env, "GET", "/api/export", undefined, token);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { posts: { path: string; content: string }[] };
+    expect(json.posts).toHaveLength(1);
+    expect(json.posts[0]).toMatchObject({
+      path: "exp.md",
+      content: expect.stringContaining("Exported body."),
+    });
+  });
+
+  it("POST /api/export/trigger 调用 GitHub repository_dispatch", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const db = getFakeD1(env);
+    db.appConfig.set("github.repoOwner", "me");
+    db.appConfig.set("github.repoName", "blog");
+    db.appConfig.set("github.token", "ghp_test");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      // eslint-disable-next-line @typescript-eslint/require-await
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    try {
+      const res = await request(env, "POST", "/api/export/trigger", undefined, token);
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { dispatched: boolean; repo: string };
+      expect(json.dispatched).toBe(true);
+      expect(json.repo).toBe("me/blog");
+      expect(vi.mocked(fetchSpy)).toHaveBeenCalledWith(
+        "https://api.github.com/repos/me/blog/dispatches",
+        expect.objectContaining({ method: "POST" }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("POST /api/export/trigger 未配置 github → 400", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const res = await request(env, "POST", "/api/export/trigger", undefined, token);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { dispatched: boolean }).dispatched).toBe(false);
+  });
+});

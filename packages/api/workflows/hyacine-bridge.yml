@@ -1,0 +1,105 @@
+# hyacine-bridge：Primary 模式（D1 与 Git 双真相源）的 GitHub 桥
+#
+# 安装：复制到博客仓库 .github/workflows/hyacine-bridge.yml，并配两个 Secrets：
+#   HYACINE_API_URL  —— Worker 地址，如 https://hyacine-api.<sub>.workers.dev
+#   HYACINE_TOKEN    —— 带 posts.w + posts.r 的 hyacine API token（管理台/CLI 创建）
+#
+# 两条数据流：
+#   export（D1 → git）: API 远程编辑保存后 repository_dispatch('hyacine:export')
+#                       -> 本 job 拉 /api/export 全量快照 -> 写文件 -> commit -> push
+#                       （GITHUB_TOKEN 提交不会再次触发 push workflow，天然防环；
+#                         commit 消息含 "hyacine:sync" 作为双保险过滤）
+#   import（git → D1）: main 分支非 hyacine 提交 push
+#                       -> 本 job 收集变更的 .md/.mdx -> POST /api/posts 上传内容
+#                       -> API 解析 frontmatter/hash 落 D1（并联动自动 AI 产物）
+name: hyacine-bridge
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [hyacine:export]
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Pull snapshot from hyacine API and write files
+        env:
+          API_URL: ${{ secrets.HYACINE_API_URL }}
+          TOKEN: ${{ secrets.HYACINE_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsSL -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/export" -o /tmp/hyacine-export.json
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("/tmp/hyacine-export.json", "utf8"));
+            const postsDir = "src/posts";
+            fs.mkdirSync(postsDir, { recursive: true });
+            for (const post of data.posts) {
+              if (!/^[A-Za-z0-9_\-\/\p{L}\p{N}]+\.(md|mdx)$/u.test(post.path)) continue; // path 安全
+              const full = `${postsDir}/${post.path}`;
+              fs.mkdirSync(require("path").dirname(full), { recursive: true });
+              fs.writeFileSync(full, post.content, "utf8");
+            }
+          '
+      - name: Commit and push
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git -c user.name="hyacine-bot" -c user.email="hyacine-bot@users.noreply.github.com" commit -m "hyacine:sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push origin main
+
+  import:
+    if: github.event_name == 'push' && !contains(github.event.head_commit.message, 'hyacine:sync')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 2
+      - name: Upload changed posts to hyacine API
+        env:
+          API_URL: ${{ secrets.HYACINE_API_URL }}
+          TOKEN: ${{ secrets.HYACINE_TOKEN }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const { execSync } = require("child_process");
+            const fs = require("fs");
+            const path = require("path");
+            let files = [];
+            try {
+              const diff = execSync("git diff --name-only HEAD^ HEAD", { encoding: "utf8" }).trim();
+              files = diff.split("\n").filter(Boolean);
+            } catch {
+              // 首个 commit：无 HEAD^，改为全量 posts 目录
+              files = [];
+              function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(md|mdx)$/.test(e.name)) files.push(p); } }
+              if (fs.existsSync("src/posts")) walk("src/posts");
+            }
+            const posts = files.filter((f) => f.startsWith("src/posts/") && /\.(md|mdx)$/.test(f));
+            for (const f of posts) {
+              const rel = f.slice("src/posts/".length);
+              const content = fs.readFileSync(f, "utf8");
+              const body = JSON.stringify({ path: rel, content, source: "git" });
+              const res = await fetch(`${process.env.API_URL}/api/posts`, {
+                method: "POST",
+                headers: { "content-type": "application/json", authorization: `Bearer ${process.env.TOKEN}` },
+                body,
+              });
+              const text = await res.text();
+              console.log(`uploaded ${rel}: ${res.status} ${text.slice(0, 120)}`);
+              if (!res.ok) process.exit(1);
+            }
+            if (posts.length === 0) console.log("no post files changed");
+          '

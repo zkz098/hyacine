@@ -12,6 +12,48 @@ export function Posts(): import("solid-js").JSX.Element {
     return res.posts;
   });
 
+  // 远程编辑（Primary 模式）：读 D1 正文 → 编辑 → POST /api/posts → 自动触发 git 导出
+  const [editingPath, setEditingPath] = createSignal<string | null>(null);
+  const [editContent, setEditContent] = createSignal("");
+  const [editLoading, setEditLoading] = createSignal(false);
+  const [editSaving, setEditSaving] = createSignal(false);
+  const [editError, setEditError] = createSignal<string | null>(null);
+  const [editResult, setEditResult] = createSignal<string | null>(null);
+
+  const openEdit = async (path: string): Promise<void> => {
+    setEditingPath(path);
+    setEditError(null);
+    setEditResult(null);
+    setEditLoading(true);
+    try {
+      const res = await apiStore.getClient().getPostContent(path);
+      setEditContent(res.content);
+    } catch (err: unknown) {
+      setEditError(messageOf(err));
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const saveEdit = async (): Promise<void> => {
+    const path = editingPath();
+    if (path === null) return;
+    setEditSaving(true);
+    setEditError(null);
+    setEditResult(null);
+    try {
+      const res = await apiStore.getClient().upsertPost({ path, content: editContent() });
+      setEditResult(
+        `${res.changed ? "已更新" : "无正文变化"}${res.dispatched ? "，已触发 Git 导出" : "（GitHub 未配置，未导出）"}`,
+      );
+      await refetch();
+    } catch (err: unknown) {
+      setEditError(messageOf(err));
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const filtered = (): ReturnType<typeof posts> => {
     const f = filter().toLowerCase();
     const list = posts();
@@ -68,11 +110,13 @@ export function Posts(): import("solid-js").JSX.Element {
                     <th class="px-3 py-2">分类</th>
                     <th class="px-3 py-2">AI</th>
                     <th class="px-3 py-2">更新</th>
+                    <th class="px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   <For each={list()}>
                     {(post: {
+                      path: string;
                       title: string;
                       slug: string;
                       draft: boolean;
@@ -121,6 +165,15 @@ export function Posts(): import("solid-js").JSX.Element {
                           </span>
                         </td>
                         <td class="px-3 py-2 text-xs text-muted">{post.updatedAt.slice(0, 10)}</td>
+                        <td class="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => void openEdit(post.path)}
+                            class="px-2 py-1 rounded border border-[var(--border)] text-xs hover:bg-[var(--surface)]"
+                          >
+                            {t("posts.editRemote")}
+                          </button>
+                        </td>
                       </tr>
                     )}
                   </For>
@@ -129,6 +182,55 @@ export function Posts(): import("solid-js").JSX.Element {
             </div>
           </Show>
         )}
+      </Show>
+
+      <Show when={editingPath() !== null}>
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div class="surface w-full max-w-3xl flex flex-col gap-3 p-4 max-h-[85vh]">
+            <div class="flex items-center justify-between">
+              <h2 class="font-semibold text-sm break-all">远程编辑：{editingPath()}</h2>
+              <button
+                type="button"
+                onClick={() => setEditingPath(null)}
+                class="text-muted hover:text-[var(--text-color)]"
+              >
+                <span class="i-ri-close-line" />
+              </button>
+            </div>
+            <Show when={editError() !== null}>
+              <Alert variant="error">{editError()}</Alert>
+            </Show>
+            <Show when={editResult() !== null}>
+              <Alert variant="success">{editResult()}</Alert>
+            </Show>
+            <Show when={editLoading()}>
+              <p class="text-sm text-muted">{t("common.loading")}</p>
+            </Show>
+            <textarea
+              value={editContent()}
+              onInput={(e) => setEditContent(e.currentTarget.value)}
+              spellcheck={false}
+              class="flex-1 min-h-[50vh] p-3 rounded border border-[var(--border)] bg-[var(--bg)] text-sm font-mono resize-y"
+            />
+            <div class="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingPath(null)}
+                class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={editSaving()}
+                onClick={() => void saveEdit()}
+                class="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50"
+              >
+                {editSaving() ? t("posts.editing") : t("posts.editSave")}
+              </button>
+            </div>
+          </div>
+        </div>
       </Show>
     </div>
   );

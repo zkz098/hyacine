@@ -44,6 +44,12 @@ export const CloudConfigSchema = z.object({
   embedModel: z.string(),
   /** 新/变更文章上行后是否自动生成嵌入 */
   embedAutogen: z.boolean().default(false),
+  /** Primary 模式：GitHub 仓库（PAT 仅写 repository_dispatch） */
+  github: z.object({
+    repoOwner: z.string(),
+    repoName: z.string(),
+    token: z.string(),
+  }),
   r2: z.object({
     endpoint: z.string(),
     accessKeyId: z.string(),
@@ -65,6 +71,11 @@ export const EffectiveConfigSchema = z.object({
   }),
   embedModel: z.string(),
   embedAutogen: z.boolean(),
+  github: z.object({
+    repoOwner: z.string(),
+    repoName: z.string(),
+    token: SecretInfoSchema,
+  }),
   r2: z.object({
     endpoint: z.string(),
     accessKeyId: z.string(),
@@ -90,6 +101,14 @@ export const ConfigUpdateRequestSchema = z
       .optional(),
     embedModel: z.string().max(128).optional(),
     embedAutogen: z.boolean().optional(),
+    github: z
+      .object({
+        repoOwner: z.string().max(128).optional(),
+        repoName: z.string().max(128).optional(),
+        token: z.string().max(512).optional(),
+      })
+      .strict()
+      .optional(),
     r2: z
       .object({
         endpoint: z.string().max(1024).optional(),
@@ -113,6 +132,9 @@ export const APP_CONFIG_KEYS = [
   "aiSummary.autogen",
   "embedAutogen",
   "embedModel",
+  "github.repoOwner",
+  "github.repoName",
+  "github.token",
   "r2.endpoint",
   "r2.accessKeyId",
   "r2.secretAccessKey",

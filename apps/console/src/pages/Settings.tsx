@@ -16,6 +16,9 @@ interface CloudForm {
   aiAutogen: boolean;
   embedModel: string;
   embedAutogen: boolean;
+  ghOwner: string;
+  ghRepo: string;
+  ghToken: string;
   r2Endpoint: string;
   r2AccessKeyId: string;
   r2Secret: string;
@@ -31,6 +34,9 @@ function emptyForm(): CloudForm {
     aiAutogen: false,
     embedModel: "",
     embedAutogen: false,
+    ghOwner: "",
+    ghRepo: "",
+    ghToken: "",
     r2Endpoint: "",
     r2AccessKeyId: "",
     r2Secret: "",
@@ -57,7 +63,11 @@ export function Settings(): import("solid-js").JSX.Element {
   // 云端动态配置面板
   const [cloudForm, setCloudForm] = createSignal(emptyForm());
   const [cloudLoaded, setCloudLoaded] = createSignal(false);
-  const [cloudKeySet, setCloudKeySet] = createSignal({ aiKey: false, r2Secret: false });
+  const [cloudKeySet, setCloudKeySet] = createSignal({
+    aiKey: false,
+    r2Secret: false,
+    ghToken: false,
+  });
   const [cloudError, setCloudError] = createSignal<string | null>(null);
   const [cloudSaving, setCloudSaving] = createSignal(false);
   const [cloudSaved, setCloudSaved] = createSignal(false);
@@ -74,12 +84,19 @@ export function Settings(): import("solid-js").JSX.Element {
         aiAutogen: cfg.aiSummary.autogen,
         embedModel: cfg.embedModel,
         embedAutogen: cfg.embedAutogen,
+        ghOwner: cfg.github.repoOwner,
+        ghRepo: cfg.github.repoName,
+        ghToken: "",
         r2Endpoint: cfg.r2.endpoint,
         r2AccessKeyId: cfg.r2.accessKeyId,
         r2Secret: "",
         r2Bucket: cfg.r2.bucket,
       });
-      setCloudKeySet({ aiKey: cfg.aiSummary.key.set, r2Secret: cfg.r2.secretAccessKey.set });
+      setCloudKeySet({
+        aiKey: cfg.aiSummary.key.set,
+        r2Secret: cfg.r2.secretAccessKey.set,
+        ghToken: cfg.github.token.set,
+      });
       setCloudLoaded(true);
     } catch (err: unknown) {
       setCloudError(`${t("settings.cloud.loadFailed")}${messageOf(err)}`);
@@ -103,6 +120,11 @@ export function Settings(): import("solid-js").JSX.Element {
       if (Object.keys(aiPatch).length > 0) update.aiSummary = aiPatch;
       if (f.embedModel !== prev.embedModel) update.embedModel = f.embedModel;
       if (f.embedAutogen !== prev.embedAutogen) update.embedAutogen = f.embedAutogen;
+      const ghPatch = {} as NonNullable<ConfigUpdateRequest["github"]>;
+      if (f.ghOwner !== prev.github.repoOwner) ghPatch.repoOwner = f.ghOwner;
+      if (f.ghRepo !== prev.github.repoName) ghPatch.repoName = f.ghRepo;
+      if (f.ghToken.length > 0) ghPatch.token = f.ghToken;
+      if (Object.keys(ghPatch).length > 0) update.github = ghPatch;
       const r2Patch: NonNullable<ConfigUpdateRequest["r2"]> = {};
       if (f.r2Endpoint !== prev.r2.endpoint) r2Patch.endpoint = f.r2Endpoint;
       if (f.r2AccessKeyId !== prev.r2.accessKeyId) r2Patch.accessKeyId = f.r2AccessKeyId;
@@ -339,6 +361,31 @@ export function Settings(): import("solid-js").JSX.Element {
                   />
                   {t("settings.cloud.embedAutogen")}
                 </label>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <h3 class="text-xs text-muted">Primary（GitHub 桥）</h3>
+                <div class="flex gap-2">
+                  <input
+                    value={cloudForm().ghOwner}
+                    onInput={(e) => setField("ghOwner", e.currentTarget.value)}
+                    placeholder="仓库 Owner"
+                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  />
+                  <input
+                    value={cloudForm().ghRepo}
+                    onInput={(e) => setField("ghRepo", e.currentTarget.value)}
+                    placeholder="仓库名（blog）"
+                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  />
+                </div>
+                <input
+                  value={cloudForm().ghToken}
+                  onInput={(e) => setField("ghToken", e.currentTarget.value)}
+                  type="password"
+                  placeholder={`GitHub PAT（留空保持不变）${cloudKeySet().ghToken ? `（${t("settings.cloud.keySet")}）` : ""}`}
+                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                />
               </div>
 
               <div class="flex flex-col gap-2">

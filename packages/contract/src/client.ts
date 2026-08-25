@@ -28,6 +28,13 @@ import {
   TokenRevokeResponseSchema,
 } from "./schemas/auth";
 import { ConfigUpdateRequestSchema, EffectiveConfigSchema } from "./schemas/config";
+import {
+  ExportPayloadSchema,
+  ExportTriggerResponseSchema,
+  PostContentResponseSchema,
+  PostUpsertRequestSchema,
+  PostUpsertResponseSchema,
+} from "./schemas/git";
 import { StatsResponseSchema } from "./schemas/stats";
 import { PostsListResponseSchema } from "./schemas/post";
 import {
@@ -204,6 +211,36 @@ export class HyacineClient {
       req,
       AiStatusRequestSchema,
     );
+  }
+
+  // ---- posts 远程编辑 / Primary 导出 --------------------------------------
+
+  async getPostContent(path: string): Promise<z.infer<typeof PostContentResponseSchema>> {
+    return this.#request(
+      PostContentResponseSchema,
+      "GET",
+      `/api/posts/content?path=${encodeURIComponent(path)}`,
+    );
+  }
+
+  async upsertPost(
+    req: z.infer<typeof PostUpsertRequestSchema>,
+  ): Promise<z.infer<typeof PostUpsertResponseSchema>> {
+    return this.#request(
+      PostUpsertResponseSchema,
+      "POST",
+      "/api/posts",
+      req,
+      PostUpsertRequestSchema,
+    );
+  }
+
+  async exportSnapshot(): Promise<z.infer<typeof ExportPayloadSchema>> {
+    return this.#request(ExportPayloadSchema, "GET", "/api/export");
+  }
+
+  async triggerExport(): Promise<z.infer<typeof ExportTriggerResponseSchema>> {
+    return this.#request(ExportTriggerResponseSchema, "POST", "/api/export/trigger");
   }
 
   // ---- assets ----------------------------------------------------------
