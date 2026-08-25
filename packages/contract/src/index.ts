@@ -5,4 +5,5 @@ export * from "./schemas/auth";
 export * from "./schemas/ai";
 export * from "./schemas/sync";
 export * from "./schemas/stats";
+export * from "./slug";
 export * from "./client";

@@ -11,6 +11,7 @@ import { basename, dirname, extname, join, relative } from "node:path";
 import matter from "gray-matter";
 import { postBodyHash } from "../hash";
 import { slugify } from "../slugify";
+import { displaySlug, autoSlug } from "@hyacine/contract";
 import type { PostIndexEntry } from "@hyacine/contract";
 import type { ProjectConfig } from "../config/project";
 
@@ -31,7 +32,8 @@ export function scanPosts(projectRoot: string, config: ProjectConfig): PostIndex
         : basename(file, extname(file));
     const slugRaw =
       typeof data.slug === "string" && data.slug.length > 0 ? data.slug : slugify(title);
-    const slug = slugRaw.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    // 显示用：显式 slug 保留中文(不二次 ASCII 化)，退化/缺失时按标题生成(中文转拼音)
+    const slug = displaySlug(data.slug, title);
     const draft = data.draft === true;
     let categories: string[] = [];
     if (Array.isArray(data.categories))
@@ -101,7 +103,7 @@ export function createPost(
 ): string {
   const contentDir = join(projectRoot, config.contentDir);
   mkdirSync(contentDir, { recursive: true });
-  const slug = slugify(title);
+  const slug = autoSlug(title);
   const filename = `${slug}.md`;
   const filePath = join(contentDir, filename);
   // Avoid overwrite by suffixing
@@ -146,7 +148,7 @@ export function renamePost(
   if (alsoSlug) {
     const parsed = matter(raw);
     const data = parsed.data as Record<string, unknown>;
-    data.slug = slugify(newName.replace(ext, ""));
+    data.slug = autoSlug(newName.replace(ext, ""));
     newRaw = matter.stringify(parsed.content, data);
     writeFileSync(found, newRaw, "utf8");
   }

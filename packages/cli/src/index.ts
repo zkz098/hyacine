@@ -8,7 +8,7 @@ import { HyacineClient, HyacineApiError } from "@hyacine/contract";
 import { findProjectRoot, loadProjectConfig } from "./config/project";
 import { loadRemoteState, saveRemoteState, isRemoteConfigured } from "./remote/state";
 import { t } from "./i18n";
-import { slugify } from "./slugify";
+import { autoSlug } from "@hyacine/contract";
 import { materializeSummary, hasUpToDateSummary } from "./frontmatter";
 import { scanPosts, findPostByQuery, createPost } from "./services/posts";
 import { buildSyncPayload, chunkText } from "./services/sync";
@@ -187,7 +187,7 @@ program
       const parsed = matter(raw);
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- gray-matter data
       const data = parsed.data as Record<string, unknown>;
-      data.slug = slugify(newName.replace(ext, ""));
+      data.slug = autoSlug(newName.replace(ext, ""));
       const newRaw = matter.stringify(parsed.content, data);
       writeFileSync(found, newRaw, "utf8");
     }

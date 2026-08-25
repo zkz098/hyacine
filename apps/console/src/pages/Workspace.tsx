@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import { t } from "../i18n";
+import { autoSlug } from "@hyacine/contract";
 import { isTauri, openFolderDialog } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import { useNavigate } from "@solidjs/router";
@@ -23,9 +24,8 @@ export function Workspace(): import("solid-js").JSX.Element {
     const dir = projectStore.projectDir();
     if (dir === null) return;
     const title = `新文章-${new Date().toISOString().slice(0, 10)}`;
-    // 标题全无 [a-z0-9] 时兜底成唯一 slug，避免生成 "-" 或空文件名
-    const slugBase = title.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    const slug = slugBase.length > 0 ? slugBase : `post-${Date.now()}`;
+    // 中文标题转拼音生成 slug（你好→ni-hao），不再产出 ------ 或 '-' 文件名
+    const slug = autoSlug(title);
     const content = `---\ntitle: ${title}\nslug: ${slug}\n\ndate: ${new Date().toISOString().slice(0, 10)}\ncategories: []\ndraft: true\n---\n\n正文...\n`;
     const cfg = projectStore.projectConfig();
     const contentDir = cfg?.contentDir ?? "src/posts";

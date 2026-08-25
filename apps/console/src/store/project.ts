@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { parse as yamlParse } from "yaml";
+import { displaySlug } from "@hyacine/contract";
 import { isTauri, readDirRecursive, readTextFile } from "../tauri/bridge";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
@@ -63,9 +64,8 @@ function extractTitle(data: Record<string, unknown>, fallback: string): string {
 }
 
 function extractSlug(data: Record<string, unknown>, title: string): string {
-  const s = data.slug;
-  if (typeof s === "string" && s.length > 0) return s.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  return title.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "untitled";
+  // 显式 slug 保留中文(不清洗成 -)；退化/缺失时按标题自动生成(中文转拼音)
+  return displaySlug(data.slug, title);
 }
 
 export async function openProject(dir: string): Promise<void> {
