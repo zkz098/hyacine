@@ -8,7 +8,7 @@ import {
   SummaryRequestSchema,
 } from "@hyacine/contract";
 import { cosine, meanPool, stripFrontmatter } from "../utils/crypto";
-import { errorBody } from "../utils/errors";
+import { errorBody, flattenZodError } from "../utils/errors";
 import { defer } from "../utils/defer";
 import { loadEffectiveConfig } from "../utils/config";
 import {
@@ -29,7 +29,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const body = await c.req.json().catch(() => null);
     const parsed = AiGenerateRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
     const { path, kinds } = parsed.data;
     const row = await c.env.DB.prepare("SELECT hash, content FROM posts WHERE path = ?")
@@ -127,7 +127,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const body = await c.req.json().catch(() => null);
     const parsed = SummaryRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const { hash, content, model } = parsed.data;
@@ -204,7 +204,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const body = await c.req.json().catch(() => null);
     const parsed = EmbedRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const { hash, chunks } = parsed.data;
@@ -268,7 +268,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const body = await c.req.json().catch(() => null);
     const parsed = SimilarRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const { hash, limit } = parsed.data;
@@ -330,7 +330,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const body = await c.req.json().catch(() => null);
     const parsed = AiStatusRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const entries = [];

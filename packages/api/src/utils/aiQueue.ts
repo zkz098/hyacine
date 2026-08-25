@@ -26,8 +26,12 @@ const MAX_ATTEMPTS = 5;
 const CAPACITY_RETRY_MINUTES = 5;
 const GENERIC_RETRY_MINUTES = 15;
 
-export async function enqueueAiNeeds(env: Env, needs: AiNeed[]): Promise<void> {
-  const now = new Date().toISOString();
+export async function enqueueAiNeeds(
+  env: Env,
+  needs: AiNeed[],
+  now: Date = new Date(),
+): Promise<void> {
+  const nowIso = now.toISOString();
   for (const n of needs) {
     await env.DB.prepare(
       `INSERT INTO ai_queue (hash, path, kind, status, attempts, next_run_at, created_at, updated_at)
@@ -43,7 +47,7 @@ export async function enqueueAiNeeds(env: Env, needs: AiNeed[]): Promise<void> {
          next_run_at=excluded.next_run_at,
          updated_at=excluded.updated_at`,
     )
-      .bind(n.hash, n.path, n.reason, now, now, now)
+      .bind(n.hash, n.path, n.reason, nowIso, nowIso, nowIso)
       .run();
   }
 }

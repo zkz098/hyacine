@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { ConfigUpdateRequestSchema, type EffectiveConfig } from "@hyacine/contract";
 import { effectiveConfig, invalidateConfigCache, loadConfigOverrides } from "../utils/config";
-import { errorBody } from "../utils/errors";
+import { errorBody, flattenZodError } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
@@ -44,7 +44,7 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     const body = await c.req.json().catch(() => null);
     const parsed = ConfigUpdateRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
     const update = parsed.data;
     const pairs: [string, string | undefined][] = [];

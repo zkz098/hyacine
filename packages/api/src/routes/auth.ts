@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { SetupRequestSchema, TokenCreateRequestSchema } from "@hyacine/contract";
 import { generateToken, sha256Hex, timingSafeEqual } from "../utils/crypto";
-import { errorBody } from "../utils/errors";
+import { errorBody, flattenZodError } from "../utils/errors";
 import { defer } from "../utils/defer";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
@@ -17,7 +17,7 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     const body = await c.req.json().catch(() => null);
     const parsed = SetupRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const envCode = c.env.SETUP_CODE;
@@ -90,7 +90,7 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     const body = await c.req.json().catch(() => null);
     const parsed = TokenCreateRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const token = generateToken();

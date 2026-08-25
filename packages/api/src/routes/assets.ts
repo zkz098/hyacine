@@ -4,7 +4,7 @@ import {
   PresignRequestSchema,
   RegisterAssetRequestSchema,
 } from "@hyacine/contract";
-import { errorBody } from "../utils/errors";
+import { errorBody, flattenZodError } from "../utils/errors";
 import { loadEffectiveConfig } from "../utils/config";
 import { createPresignedPutUrl } from "../utils/presign";
 import { authMiddleware } from "../middleware/auth";
@@ -15,7 +15,7 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     const body = await c.req.json().catch(() => null);
     const parsed = PresignRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const { key, contentType } = parsed.data;
@@ -67,7 +67,7 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     const body = await c.req.json().catch(() => null);
     const parsed = RegisterAssetRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const { path, assetType, fileType, r2Key, checksum, size } = parsed.data;

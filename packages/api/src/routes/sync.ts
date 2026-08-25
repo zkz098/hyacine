@@ -1,7 +1,7 @@
 // oxlint-disable eslint/no-await-in-loop
 import { Hono } from "hono";
 import { SyncUploadRequestSchema } from "@hyacine/contract";
-import { errorBody } from "../utils/errors";
+import { errorBody, flattenZodError } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
 import { defer } from "../utils/defer";
 import { loadEffectiveConfig } from "../utils/config";
@@ -14,7 +14,7 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     const body = await c.req.json().catch(() => null);
     const parsed = SyncUploadRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
     const input = parsed.data;

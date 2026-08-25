@@ -8,5 +8,6 @@ export * from "./schemas/stats";
 export * from "./schemas/config";
 export * from "./schemas/git";
 export * from "./schemas/syntax";
+export * from "./schemas/collections";
 export * from "./slug";
 export * from "./client";

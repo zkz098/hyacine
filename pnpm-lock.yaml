@@ -173,12 +173,18 @@ importers:
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
+      jiti:
+        specifier: ^2.7.0
+        version: 2.7.0
       tar:
         specifier: ^7.4.3
         version: 7.5.22
       yaml:
         specifier: ^2.7.0
         version: 2.9.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

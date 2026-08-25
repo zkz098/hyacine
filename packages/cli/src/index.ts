@@ -11,6 +11,7 @@ import { t } from "./i18n";
 import { autoSlug } from "@hyacine/contract";
 import { materializeSummary, hasUpToDateSummary } from "./frontmatter";
 import { installBlog } from "./services/install";
+import { generateCollectionsFile } from "./collections/generate";
 import { scanPosts, findPostByQuery, createPost } from "./services/posts";
 import { buildSyncPayload, chunkText } from "./services/sync";
 import { createBackup } from "./services/backup";
@@ -98,46 +99,43 @@ program
 // ---- install / setup（旧 hyc setup 模式移植） ----
 program
   .command("install")
-    .alias("setup")
-    .argument("[dir]", "target directory (default: cwd)")
-    .option("--source <source>", "clone source: github|gh-proxy|gh-proxy-v6", "github")
-    .option("--repository <url>", "template repository URL")
-    .option("--install", "run dependency install after clone", false)
-    .option("--pm <pm>", "package manager: pnpm|npm|bun", "pnpm")
-    .description("install a new blog from astro-blog-shokax template (setup mode)")
-    .action(
-      async (
-        dirArg: string | undefined,
-        opts: {
-          source?: string;
-          repository?: string;
-          install?: boolean;
-          pm?: string;
-        },
-      ) => {
-        try {
-          const source = (opts.source ?? "github") as
-            | "github"
-            | "gh-proxy"
-            | "gh-proxy-v6";
-          const pm = (opts.pm ?? "pnpm") as "pnpm" | "npm" | "bun";
-          const result = await installBlog({
-            dir: dirArg ?? process.cwd(),
-            source,
-            repository: opts.repository,
-            install: opts.install === true,
-            packageManager: pm,
-          });
-          console.log(
-            `✔ 安装完成：${result.clonedInto}${result.installed ? "（已安装依赖）" : "（未安装依赖，可在目录内执行 pnpm install）"}`,
-          );
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`✘ 安装失败：${message}`);
-          process.exitCode = 1;
-        }
+  .alias("setup")
+  .argument("[dir]", "target directory (default: cwd)")
+  .option("--source <source>", "clone source: github|gh-proxy|gh-proxy-v6", "github")
+  .option("--repository <url>", "template repository URL")
+  .option("--install", "run dependency install after clone", false)
+  .option("--pm <pm>", "package manager: pnpm|npm|bun", "pnpm")
+  .description("install a new blog from astro-blog-shokax template (setup mode)")
+  .action(
+    async (
+      dirArg: string | undefined,
+      opts: {
+        source?: string;
+        repository?: string;
+        install?: boolean;
+        pm?: string;
       },
-    );
+    ) => {
+      try {
+        const source = (opts.source ?? "github") as "github" | "gh-proxy" | "gh-proxy-v6";
+        const pm = (opts.pm ?? "pnpm") as "pnpm" | "npm" | "bun";
+        const result = await installBlog({
+          dir: dirArg ?? process.cwd(),
+          source,
+          repository: opts.repository,
+          install: opts.install === true,
+          packageManager: pm,
+        });
+        console.log(
+          `✔ 安装完成：${result.clonedInto}${result.installed ? "（已安装依赖）" : "（未安装依赖，可在目录内执行 pnpm install）"}`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`✘ 安装失败：${message}`);
+        process.exitCode = 1;
+      }
+    },
+  );
 
 // ---- new ----
 program
@@ -775,6 +773,47 @@ program
     } catch (err) {
       handleApiError(err);
     }
+  });
+
+// ---- collections（Astro 内容集合 → hyacine.collections.json） ----------------
+program
+  .command("collections")
+  .option("--out <path>", "输出路径（相对项目根，默认 hyacine.collections.json）")
+  .option("--force", "覆盖已存在的更强来源文件", false)
+  .description("从 Astro 内容集合生成类型信息文件（UI/校验来源）")
+  .action(async (opts: { out?: string; force?: boolean }) => {
+    const { root, config } = getProjectInfo();
+    const result = await generateCollectionsFile(root, config, {
+      outPath: opts.out,
+      force: opts.force === true,
+    });
+    if (result === null) {
+      console.error("✘ 生成失败");
+      process.exitCode = 1;
+      return;
+    }
+    const sourceLabel =
+      result.source === "content.config.ts" ? "content.config.ts" : "Astro sync 产物(降级)";
+    if (result.file.collections.length === 0) {
+      console.error(`✘ 未提取到任何集合（来源 ${sourceLabel}）`);
+      console.error("  提示：先在博客目录运行 astro sync/dev/build，或检查 src/content.config.ts");
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      `✔ 提取 ${result.file.collections.length} 个集合（来源 ${sourceLabel}）${result.overwritten ? "（已覆盖旧文件）" : ""}`,
+    );
+    for (const c of result.file.collections) {
+      const fields = c.ui.fields.length > 0 ? `，${c.ui.fields.length} 个字段` : "";
+      const ext = c.extensions.join("/");
+      console.log(`  ${c.name} → ${c.dir} [${ext}]${fields}`);
+    }
+    if (result.file.warnings.length > 0) {
+      for (const w of result.file.warnings) {
+        console.log(`  ⚠ ${w}`);
+      }
+    }
+    console.log(`→ ${result.outPath}`);
   });
 
 program.parse();

@@ -108,8 +108,8 @@ describe("processAiQueue", () => {
     });
     const env = seededEnv(aiRun);
     const db = getFakeD1(env);
-    await enqueueAiNeeds(env, [queueNeed({ reason: "embed" })]);
     const now = new Date("2026-08-25T12:00:00.000Z");
+    await enqueueAiNeeds(env, [queueNeed({ reason: "embed" })], now);
     const results = await processAiQueue(env, 10, now);
     expect(results[0]?.outcome).toBe("retry");
     const row = db.aiQueue.get("a".repeat(16));
