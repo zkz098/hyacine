@@ -1,9 +1,16 @@
-import { createSignal, Show, onMount } from "solid-js";
+import { createSignal, Show, onMount, For } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
+import { Button } from "../components/Button";
+import { Input } from "../components/Input";
+import { Select } from "../components/Select";
+import { Card, CardHeader, CardTitle, CardDescription } from "../components/Card";
+import { Badge } from "../components/Badge";
+import { PageHeader } from "../components/PageHeader";
+import { Tabs } from "../components/Tabs";
 import { isTauri, gitVersion } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import {
@@ -13,6 +20,7 @@ import {
 } from "../editor/syntax/pluginSettings";
 import { loadProjectSyntaxPlugins } from "../editor/syntax/projectPlugins";
 import type { ConfigUpdateRequest } from "@hyacine/contract";
+import { toast } from "../components/Toast";
 
 interface CloudForm {
   aiEndpoint: string;
@@ -50,10 +58,13 @@ function emptyForm(): CloudForm {
   };
 }
 
+type SettingsTab = "api" | "cloud" | "plugins" | "system";
+
 export function Settings(): import("solid-js").JSX.Element {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = createSignal<SettingsTab>("api");
+
   const [url, setUrl] = createSignal(apiStore.state.baseUrl);
-  const [saved, setSaved] = createSignal(false);
   const [health, setHealth] = createSignal<{
     ok: boolean;
     version: string;
@@ -76,7 +87,6 @@ export function Settings(): import("solid-js").JSX.Element {
   });
   const [cloudError, setCloudError] = createSignal<string | null>(null);
   const [cloudSaving, setCloudSaving] = createSignal(false);
-  const [cloudSaved, setCloudSaved] = createSignal(false);
 
   const loadCloudConfig = async (): Promise<void> => {
     setCloudError(null);
@@ -112,7 +122,6 @@ export function Settings(): import("solid-js").JSX.Element {
   const handleCloudSave = async (): Promise<void> => {
     setCloudSaving(true);
     setCloudError(null);
-    setCloudSaved(false);
     try {
       const f = cloudForm();
       const prev = await apiStore.getClient().getConfig();
@@ -137,12 +146,13 @@ export function Settings(): import("solid-js").JSX.Element {
       if (f.r2Secret.length > 0) r2Patch.secretAccessKey = f.r2Secret;
       if (f.r2Bucket !== prev.r2.bucket) r2Patch.bucket = f.r2Bucket;
       if (Object.keys(r2Patch).length > 0) update.r2 = r2Patch;
+
       await apiStore.getClient().updateConfig(update);
-      setCloudSaved(true);
-      setTimeout(() => setCloudSaved(false), 2000);
-      await loadCloudConfig(); // 刷新已设置标志
+      toast.success(t("settings.cloud.saved"));
+      await loadCloudConfig();
     } catch (err: unknown) {
       setCloudError(messageOf(err));
+      toast.error(messageOf(err), "保存云端配置失败");
     } finally {
       setCloudSaving(false);
     }
@@ -152,7 +162,7 @@ export function Settings(): import("solid-js").JSX.Element {
     setCloudForm((f) => ({ ...f, [key]: value }));
   };
 
-  // 语法插件设置（本地预览）
+  // 语法插件设置
   const [pluginEnabledTick, setPluginEnabledTick] = createSignal(0);
   const [projectPluginNames, setProjectPluginNames] = createSignal<string[]>([]);
   const [projectPluginErrors, setProjectPluginErrors] = createSignal<string[]>([]);
@@ -172,17 +182,14 @@ export function Settings(): import("solid-js").JSX.Element {
       void gitVersion().then((v) => setGitVer(v));
       void refreshProjectPlugins();
     }
-  });
-  onMount(() => {
-    if (isTauri()) {
-      void gitVersion().then((v) => setGitVer(v));
+    if (apiStore.isAuthed()) {
+      void loadCloudConfig();
     }
   });
 
   const handleSave = (): void => {
     apiStore.setBaseUrl(url().trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    toast.success(t("settings.saved"));
   };
 
   const handleTest = async (): Promise<void> => {
@@ -191,16 +198,16 @@ export function Settings(): import("solid-js").JSX.Element {
     setHealth(null);
     const prevUrl = apiStore.state.baseUrl;
     try {
-      // 暂时用当前输入框的 url 做连通性测试，不提交持久化
       const testUrl = url().trim();
       if (testUrl !== prevUrl) apiStore.setBaseUrl(testUrl);
       const client = apiStore.getClient();
       const res = await client.health();
       setHealth(res);
+      toast.success(`连接正常 · 版本 ${res.version}`);
     } catch (err: unknown) {
       setHealthError(messageOf(err));
+      toast.error(messageOf(err), "测试连接失败");
     } finally {
-      // 测试非破坏性：无论成败都恢复原 baseUrl，避免失败残留死 URL 且被持久化
       if (apiStore.state.baseUrl !== prevUrl) apiStore.setBaseUrl(prevUrl);
       setHealthLoading(false);
     }
@@ -209,325 +216,450 @@ export function Settings(): import("solid-js").JSX.Element {
   const handleTheme = (next: "light" | "dark"): void => {
     setThemeSignal(next);
     apiStore.setTheme(next);
+    toast.info(`已切换至${next === "dark" ? "暗色" : "亮色"}主题`);
   };
 
-  // oxlint-disable-next-line unicorn/consistent-function-scoping -- uses apiStore/navigate, keep inside
   const handleLogout = (): void => {
     apiStore.clearAuth();
     navigate("/login");
   };
 
   return (
-    <div class="flex flex-col gap-4 max-w-lg">
-      <h1 class="text-xl font-bold">{t("settings.title")}</h1>
+    <div class="flex flex-col gap-6 max-w-4xl">
+      <PageHeader
+        title={t("settings.title")}
+        description="管理系统网络连接、云端动态参数、ShokaX 语法扩展及外观偏好"
+      />
 
-      <div class="surface p-4 flex flex-col gap-3">
-        <label class="flex flex-col gap-1 text-sm">
-          <span>{t("settings.apiUrl")}</span>
-          <input
-            value={url()}
-            onInput={(e) => setUrl(e.currentTarget.value)}
-            placeholder="https://your-api.workers.dev"
-            class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-          />
-        </label>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            onClick={handleSave}
-            class="px-4 py-2 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)]"
-          >
-            {t("settings.save")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleTest()}
-            disabled={healthLoading()}
-            class="px-4 py-2 rounded border border-[var(--border)] text-sm hover:bg-[var(--bg)] disabled:opacity-50"
-          >
-            {t("settings.test")}
-          </button>
-          <Show when={saved()}>
-            <span class="text-sm text-[var(--ok)] self-center">{t("settings.saved")}</span>
-          </Show>
-        </div>
-        <Show when={healthError() !== null}>
-          <Alert variant="error">{healthError()}</Alert>
-        </Show>
-        <Show when={health()}>
-          {(h) => (
-            <Alert variant="info">
-              <div class="text-xs flex flex-col gap-1">
-                <span>
-                  ok: {String(h().ok)} · version: {h().version}
-                </span>
-                <span>
-                  ai.summary: {String(h().ai.summary)} · ai.embed: {String(h().ai.embed)}
-                </span>
-                <Show when={h().needsSetup}>
-                  <span>needsSetup: true</span>
-                </Show>
+      {/* Settings Navigation Tabs */}
+      <Tabs
+        activeKey={activeTab()}
+        onChange={(k) => setActiveTab(k as SettingsTab)}
+        items={[
+          { key: "api", label: "连接与外观", icon: "i-ri-global-line" },
+          { key: "cloud", label: "云端动态配置", icon: "i-ri-cloud-line", disabled: !apiStore.isAuthed() },
+          { key: "plugins", label: "语法插件", icon: "i-ri-puzzle-line" },
+          { key: "system", label: "关于与桌面", icon: "i-ri-information-line" },
+        ]}
+      />
+
+      {/* Tab 1: API & Theme */}
+      <Show when={activeTab() === "api"}>
+        <div class="flex flex-col gap-5">
+          <Card class="flex flex-col gap-4">
+            <CardHeader>
+              <div>
+                <CardTitle>API 服务连接</CardTitle>
+                <CardDescription>配置 Cloudflare Worker API 端点地址</CardDescription>
               </div>
-            </Alert>
-          )}
-        </Show>
-      </div>
+            </CardHeader>
 
-      <div class="surface p-4 flex flex-col gap-3">
-        <h2 class="font-semibold text-sm">{t("settings.theme")}</h2>
-        <div class="flex gap-2">
-          <button
-            type="button"
-            onClick={() => handleTheme("light")}
-            class={`px-3 py-1.5 rounded border text-sm ${theme() === "light" ? "bg-[var(--accent)] text-white border-transparent" : "border-[var(--border)]"}`}
-          >
-            {t("settings.theme.light")}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTheme("dark")}
-            class={`px-3 py-1.5 rounded border text-sm ${theme() === "dark" ? "bg-[var(--accent)] text-white border-transparent" : "border-[var(--border)]"}`}
-          >
-            {t("settings.theme.dark")}
-          </button>
+            <Input
+              label={t("settings.apiUrl")}
+              value={url()}
+              onInput={(e) => setUrl(e.currentTarget.value)}
+              placeholder="https://your-api.workers.dev"
+              icon="i-ri-links-line"
+            />
+
+            <div class="flex items-center gap-2.5 pt-1">
+              <Button
+                variant="primary"
+                size="sm"
+                icon="i-ri-save-line"
+                onClick={handleSave}
+              >
+                {t("settings.save")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                loading={healthLoading()}
+                icon="i-ri-wifi-line"
+                onClick={() => void handleTest()}
+              >
+                {t("settings.test")}
+              </Button>
+            </div>
+
+            <Show when={healthError() !== null}>
+              <Alert variant="error" title="连接失败">
+                {healthError()}
+              </Alert>
+            </Show>
+
+            <Show when={health()}>
+              {(h) => (
+                <Alert variant="info" title="服务健康状态 (Health)">
+                  <div class="text-xs flex flex-col gap-1 font-mono">
+                    <span>
+                      状态: {h().ok ? "正常 (OK)" : "异常"} · 版本: {h().version}
+                    </span>
+                    <span>
+                      AI 摘要: {String(h().ai.summary)} · AI 向量嵌入: {String(h().ai.embed)}
+                    </span>
+                    <Show when={h().needsSetup}>
+                      <span class="text-[var(--danger)]">需要初始化 SETUP_CODE</span>
+                    </Show>
+                  </div>
+                </Alert>
+              )}
+            </Show>
+          </Card>
+
+          {/* Theme Settings */}
+          <Card class="flex flex-col gap-3">
+            <CardHeader>
+              <div>
+                <CardTitle>{t("settings.theme")}</CardTitle>
+                <CardDescription>选择管理台界面亮暗色色彩模式</CardDescription>
+              </div>
+            </CardHeader>
+
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleTheme("light")}
+                class={`flex-1 flex items-center justify-center gap-2 p-3 rounded-[6px] border text-xs font-medium transition-all cursor-pointer ${
+                  theme() === "light"
+                    ? "border-[var(--accent)] bg-[var(--note-primary-bg)] text-[var(--accent)] font-semibold shadow-xs"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--g-1)]"
+                }`}
+              >
+                <span class="i-ri-sun-line text-base" />
+                <span>{t("settings.theme.light")}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTheme("dark")}
+                class={`flex-1 flex items-center justify-center gap-2 p-3 rounded-[6px] border text-xs font-medium transition-all cursor-pointer ${
+                  theme() === "dark"
+                    ? "border-[var(--accent)] bg-[var(--note-primary-bg)] text-[var(--accent)] font-semibold shadow-xs"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--g-1)]"
+                }`}
+              >
+                <span class="i-ri-moon-line text-base" />
+                <span>{t("settings.theme.dark")}</span>
+              </button>
+            </div>
+          </Card>
         </div>
-      </div>
+      </Show>
 
-      <Show when={apiStore.isAuthed()}>
-        <div class="surface p-4 flex flex-col gap-3">
-          <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-sm">{t("settings.cloud.title")}</h2>
-            <Show when={!cloudLoaded()}>
-              <button
-                type="button"
+      {/* Tab 2: Cloud Config */}
+      <Show when={activeTab() === "cloud"}>
+        <div class="flex flex-col gap-5">
+          <Card class="flex flex-col gap-5">
+            <CardHeader>
+              <div>
+                <CardTitle>{t("settings.cloud.title")}</CardTitle>
+                <CardDescription>配置云端 AI 服务提供商、GitHub 桥接导出及 R2 对象存储参数（即时生效，免重新部署）</CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="xs"
+                icon="i-ri-refresh-line"
                 onClick={() => void loadCloudConfig()}
-                class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
               >
-                {t("settings.test")}
-              </button>
-            </Show>
-          </div>
+                重新加载
+              </Button>
+            </CardHeader>
 
-          <Show when={cloudError() !== null}>
-            <Alert variant="error">{cloudError()}</Alert>
-            <Show when={!cloudLoaded()}>
-              <button
-                type="button"
-                onClick={() => void loadCloudConfig()}
-                class="self-start px-3 py-1.5 rounded border border-[var(--border)] text-sm"
-              >
-                {t("settings.test")}
-              </button>
+            <Show when={cloudError() !== null}>
+              <Alert variant="error">{cloudError()}</Alert>
             </Show>
-          </Show>
 
-          <Show when={cloudLoaded()}>
-            <div class="flex flex-col gap-3">
-              <div class="flex flex-col gap-2">
-                <h3 class="text-xs text-muted">{t("settings.cloud.ai")}</h3>
-                <div class="flex items-center gap-3 text-sm">
-                  <label class="flex items-center gap-1">
-                    <span class="text-muted">{t("settings.cloud.ai.provider")}</span>
-                    <select
-                      value={cloudForm().aiProvider}
-                      onChange={(e) => {
-                        const v = e.currentTarget.value;
-                        setField("aiProvider", v === "workers-ai" ? "workers-ai" : "byok");
-                      }}
-                      class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                    >
-                      <option value="byok">OpenAI 兼容 (BYOK)</option>
-                      <option value="workers-ai">Workers AI</option>
-                    </select>
-                  </label>
-                  <label class="flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={cloudForm().aiAutogen}
-                      onChange={(e) => setField("aiAutogen", e.currentTarget.checked)}
-                    />
-                    {t("settings.cloud.ai.autogen")}
-                  </label>
+            <Show when={cloudLoaded()}>
+              {/* Section: AI Summary */}
+              <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
+                <div class="flex items-center gap-2">
+                  <span class="i-ri-sparkling-fill text-[var(--accent)]" />
+                  <span class="font-semibold text-xs text-[var(--text)]">{t("settings.cloud.ai")}</span>
                 </div>
-                {/* BYOK 专属：endpoint + key；Workers AI 只配模型名 */}
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    label={t("settings.cloud.ai.provider")}
+                    value={cloudForm().aiProvider}
+                    onChange={(e) => {
+                      const v = e.currentTarget.value;
+                      setField("aiProvider", v === "workers-ai" ? "workers-ai" : "byok");
+                    }}
+                    options={[
+                      { label: "OpenAI 兼容协议 (BYOK)", value: "byok" },
+                      { label: "Cloudflare Workers AI", value: "workers-ai" },
+                    ]}
+                  />
+
+                  <div class="flex flex-col justify-end">
+                    <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-2">
+                      <input
+                        type="checkbox"
+                        checked={cloudForm().aiAutogen}
+                        onChange={(e) => setField("aiAutogen", e.currentTarget.checked)}
+                        class="rounded text-[var(--accent)]"
+                      />
+                      <span>{t("settings.cloud.ai.autogen")}</span>
+                    </label>
+                  </div>
+                </div>
+
                 <Show when={cloudForm().aiProvider === "byok"}>
-                  <input
-                    value={cloudForm().aiEndpoint}
-                    onInput={(e) => setField("aiEndpoint", e.currentTarget.value)}
-                    placeholder={t("settings.cloud.ai.endpoint")}
-                    class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                  />
-                  <input
-                    value={cloudForm().aiKey}
-                    onInput={(e) => setField("aiKey", e.currentTarget.value)}
-                    type="password"
-                    placeholder={`${t("settings.cloud.ai.key")}（${cloudKeySet().aiKey ? t("settings.cloud.keySet") : t("settings.cloud.keyUnset")}）`}
-                    class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                  />
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input
+                      label={t("settings.cloud.ai.endpoint")}
+                      value={cloudForm().aiEndpoint}
+                      onInput={(e) => setField("aiEndpoint", e.currentTarget.value)}
+                      placeholder="https://api.openai.com/v1/chat/completions"
+                    />
+                    <Input
+                      label={`${t("settings.cloud.ai.key")} (${cloudKeySet().aiKey ? "已设置" : "未设置"})`}
+                      value={cloudForm().aiKey}
+                      onInput={(e) => setField("aiKey", e.currentTarget.value)}
+                      type="password"
+                      placeholder="留空保持现有 Key 不变"
+                    />
+                  </div>
                 </Show>
-                <input
+
+                <Input
+                  label="摘要模型名称"
                   value={cloudForm().aiModel}
                   onInput={(e) => setField("aiModel", e.currentTarget.value)}
                   placeholder={
                     cloudForm().aiProvider === "workers-ai"
-                      ? t("settings.cloud.ai.modelWorkers")
-                      : t("settings.cloud.ai.model")
+                      ? "@cf/meta/llama-3.2-3b-instruct"
+                      : "gpt-4o-mini / deepseek-chat"
                   }
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
                 />
               </div>
 
-              <div class="flex flex-col gap-2">
-                <h3 class="text-xs text-muted">嵌入</h3>
-                <input
-                  value={cloudForm().embedModel}
-                  onInput={(e) => setField("embedModel", e.currentTarget.value)}
-                  placeholder={t("settings.cloud.embedModel")}
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                />
-                <label class="flex items-center gap-1 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cloudForm().embedAutogen}
-                    onChange={(e) => setField("embedAutogen", e.currentTarget.checked)}
+              {/* Section: Vector Embeddings */}
+              <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
+                <div class="flex items-center gap-2">
+                  <span class="i-ri-node-tree text-[var(--accent)]" />
+                  <span class="font-semibold text-xs text-[var(--text)]">向量嵌入 (Vector Embeddings)</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label={t("settings.cloud.embedModel")}
+                    value={cloudForm().embedModel}
+                    onInput={(e) => setField("embedModel", e.currentTarget.value)}
+                    placeholder="@cf/baai/bge-large-en-v1.5"
                   />
-                  {t("settings.cloud.embedAutogen")}
-                </label>
+                  <div class="flex flex-col justify-end">
+                    <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-2">
+                      <input
+                        type="checkbox"
+                        checked={cloudForm().embedAutogen}
+                        onChange={(e) => setField("embedAutogen", e.currentTarget.checked)}
+                        class="rounded text-[var(--accent)]"
+                      />
+                      <span>{t("settings.cloud.embedAutogen")}</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div class="flex flex-col gap-2">
-                <h3 class="text-xs text-muted">Primary（GitHub 桥）</h3>
-                <div class="flex gap-2">
-                  <input
+              {/* Section: Primary GitHub Bridge */}
+              <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
+                <div class="flex items-center gap-2">
+                  <span class="i-ri-github-fill text-[var(--text)]" />
+                  <span class="font-semibold text-xs text-[var(--text)]">Primary 模式 (GitHub 桥接)</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="仓库拥有者 (Owner)"
                     value={cloudForm().ghOwner}
                     onInput={(e) => setField("ghOwner", e.currentTarget.value)}
-                    placeholder="仓库 Owner"
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                    placeholder="your-github-username"
                   />
-                  <input
+                  <Input
+                    label="仓库名称 (Repo)"
                     value={cloudForm().ghRepo}
                     onInput={(e) => setField("ghRepo", e.currentTarget.value)}
-                    placeholder="仓库名（blog）"
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                    placeholder="my-blog"
                   />
                 </div>
-                <input
+                <Input
+                  label={`GitHub 个人访问令牌 (PAT) ${cloudKeySet().ghToken ? "(已设置)" : "(未设置)"}`}
                   value={cloudForm().ghToken}
                   onInput={(e) => setField("ghToken", e.currentTarget.value)}
                   type="password"
-                  placeholder={`GitHub PAT（留空保持不变）${cloudKeySet().ghToken ? `（${t("settings.cloud.keySet")}）` : ""}`}
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="ghp_xxx (留空保持不变)"
                 />
               </div>
 
-              <div class="flex flex-col gap-2">
-                <h3 class="text-xs text-muted">{t("settings.cloud.r2")}</h3>
-                <input
-                  value={cloudForm().r2Endpoint}
-                  onInput={(e) => setField("r2Endpoint", e.currentTarget.value)}
-                  placeholder={t("settings.cloud.r2.endpoint")}
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                />
-                <div class="flex gap-2">
-                  <input
+              {/* Section: R2 Storage */}
+              <div class="flex flex-col gap-3">
+                <div class="flex items-center gap-2">
+                  <span class="i-ri-database-2-line text-[var(--accent)]" />
+                  <span class="font-semibold text-xs text-[var(--text)]">{t("settings.cloud.r2")}</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label={t("settings.cloud.r2.endpoint")}
+                    value={cloudForm().r2Endpoint}
+                    onInput={(e) => setField("r2Endpoint", e.currentTarget.value)}
+                    placeholder="https://<accountid>.r2.cloudflarestorage.com"
+                  />
+                  <Input
+                    label={t("settings.cloud.r2.bucket")}
+                    value={cloudForm().r2Bucket}
+                    onInput={(e) => setField("r2Bucket", e.currentTarget.value)}
+                    placeholder="blog-assets"
+                  />
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label={t("settings.cloud.r2.accessKeyId")}
                     value={cloudForm().r2AccessKeyId}
                     onInput={(e) => setField("r2AccessKeyId", e.currentTarget.value)}
-                    placeholder={t("settings.cloud.r2.accessKeyId")}
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                    placeholder="R2 Access Key ID"
                   />
-                  <input
+                  <Input
+                    label={`${t("settings.cloud.r2.secret")} (${cloudKeySet().r2Secret ? "已设置" : "未设置"})`}
                     value={cloudForm().r2Secret}
                     onInput={(e) => setField("r2Secret", e.currentTarget.value)}
                     type="password"
-                    placeholder={`${t("settings.cloud.r2.secret")}（${cloudKeySet().r2Secret ? t("settings.cloud.keySet") : t("settings.cloud.keyUnset")}）`}
-                    class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                    placeholder="留空保持不变"
                   />
                 </div>
-                <input
-                  value={cloudForm().r2Bucket}
-                  onInput={(e) => setField("r2Bucket", e.currentTarget.value)}
-                  placeholder={t("settings.cloud.r2.bucket")}
-                  class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-                />
               </div>
 
-              <div class="flex gap-2 items-center">
-                <button
-                  type="button"
-                  disabled={cloudSaving()}
+              <div class="pt-3">
+                <Button
+                  variant="primary"
+                  size="md"
+                  loading={cloudSaving()}
+                  icon="i-ri-save-line"
                   onClick={() => void handleCloudSave()}
-                  class="px-4 py-2 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50"
                 >
                   {t("settings.cloud.save")}
-                </button>
-                <Show when={cloudSaved()}>
-                  <span class="text-sm text-[var(--ok)]">{t("settings.cloud.saved")}</span>
-                </Show>
+                </Button>
               </div>
-            </div>
-          </Show>
+            </Show>
+          </Card>
         </div>
       </Show>
 
-      <div class="surface p-4 flex flex-col gap-3">
-        <h2 class="font-semibold text-sm">语法插件（预览端）</h2>
-        <p class="text-xs text-muted">
-          内置 ShokaX 扩展语法已拆为插件；项目可在
-          <code class="text-mono">.hyacine/plugins/*.js</code>里用
-          <code class="text-mono">{"registerSyntaxPlugin({ ... })"}</code>{" "}
-          注册自定义组件/CSS（本地代码，勿装不明来源插件）。
-        </p>
-        <label class="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={pluginEnabledTick() >= 0 && loadEnabledPlugins().includes("shokax-basic")}
-            onChange={(e) => {
-              togglePluginEnabled("shokax-basic", e.currentTarget.checked);
-              setPluginEnabledTick((v) => v + 1);
-              notifyPluginsChanged();
-            }}
-          />
-          <span>
-            shokax-basic（Note 卡片 / code-group / span / ruby / spoiler / ++插入++ / Quiz / Tabs）
-          </span>
-        </label>
-        <Show when={isTauri()}>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void refreshProjectPlugins()}
-              class="px-3 py-1.5 rounded border border-[var(--border)] text-sm"
-            >
-              重新扫描项目插件
-            </button>
-            <span class="text-xs text-muted">
-              {projectPluginNames().length > 0
-                ? `已加载：${projectPluginNames().join(", ")}`
-                : "未发现 .hyacine/plugins/*.js"}
-            </span>
-          </div>
-          <Show when={projectPluginErrors().length > 0}>
-            <Alert variant="warning">{projectPluginErrors().join(" | ")}</Alert>
-          </Show>
-        </Show>
-      </div>
+      {/* Tab 3: Syntax Plugins */}
+      <Show when={activeTab() === "plugins"}>
+        <div class="flex flex-col gap-5">
+          <Card class="flex flex-col gap-4">
+            <CardHeader>
+              <div>
+                <CardTitle>ShokaX 语法扩展插件</CardTitle>
+                <CardDescription>
+                  控制 Satteri 渲染管线所启用的语法插件与项目自定义扩展组件
+                </CardDescription>
+              </div>
+            </CardHeader>
 
-      <div class="surface p-4 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={handleLogout}
-          class="self-start px-4 py-2 rounded btn-danger text-sm"
-        >
-          {t("settings.logout")}
-        </button>
-        <p class="text-xs text-muted">{t("settings.version")}: 0.1.0</p>
-      </div>
+            <div class="p-3 rounded-[6px] bg-[var(--g-1)] border border-[var(--border)] flex flex-col gap-2">
+              <label class="flex items-center gap-2.5 text-xs font-semibold cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pluginEnabledTick() >= 0 && loadEnabledPlugins().includes("shokax-basic")}
+                  onChange={(e) => {
+                    togglePluginEnabled("shokax-basic", e.currentTarget.checked);
+                    setPluginEnabledTick((v) => v + 1);
+                    notifyPluginsChanged();
+                    toast.info("已更新插件启用配置");
+                  }}
+                  class="rounded text-[var(--accent)]"
+                />
+                <span>shokax-basic 内置扩展语法</span>
+              </label>
+              <p class="text-[11px] text-[var(--muted)] pl-6">
+                包含 Note 语义卡片、code-group 代码分组、span/ruby 注音、spoiler 黑幕剧透、++插入强调++、Quiz 测验及 Tabs 标签卡片。
+              </p>
+            </div>
 
-      <Show when={isTauri()}>
-        <div class="surface p-4 flex flex-col gap-2">
-          <h2 class="font-semibold text-sm">桌面</h2>
-          <p class="text-xs text-muted">项目目录：{projectStore.projectDir() ?? "未选择"}</p>
-          <p class="text-xs text-muted">Git：{gitVer() ?? "检测中..."}</p>
+            <Show when={isTauri()}>
+              <div class="flex flex-col gap-2.5 pt-2 border-t border-[var(--border)]">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-xs text-[var(--text)]">项目级自定义插件 (.hyacine/plugins/*.js)</span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    icon="i-ri-refresh-line"
+                    onClick={() => void refreshProjectPlugins()}
+                  >
+                    重新扫描
+                  </Button>
+                </div>
+
+                <div class="text-xs text-[var(--muted)]">
+                  {projectPluginNames().length > 0 ? (
+                    <div class="flex flex-wrap gap-1.5 pt-1">
+                      <For each={projectPluginNames()}>
+                        {(name) => <Badge variant="success">{name}</Badge>}
+                      </For>
+                    </div>
+                  ) : (
+                    <p class="text-[11px]">未发现 .hyacine/plugins/*.js 自定义插件</p>
+                  )}
+                </div>
+
+                <Show when={projectPluginErrors().length > 0}>
+                  <Alert variant="warning" title="插件加载警告">
+                    {projectPluginErrors().join(" | ")}
+                  </Alert>
+                </Show>
+              </div>
+            </Show>
+          </Card>
+        </div>
+      </Show>
+
+      {/* Tab 4: System & About */}
+      <Show when={activeTab() === "system"}>
+        <div class="flex flex-col gap-5">
+          <Card class="flex flex-col gap-4">
+            <CardHeader>
+              <div>
+                <CardTitle>环境与版本信息</CardTitle>
+                <CardDescription>当前运行环境与依赖状态</CardDescription>
+              </div>
+              <Badge variant="primary">v0.1.0</Badge>
+            </CardHeader>
+
+            <div class="flex flex-col gap-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
+                <span class="text-[var(--muted)]">运行模式</span>
+                <span class="font-semibold font-mono">{isTauri() ? "Tauri 桌面端" : "Web 浏览器端"}</span>
+              </div>
+
+              <Show when={isTauri()}>
+                <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
+                  <span class="text-[var(--muted)]">本地项目目录</span>
+                  <span class="font-mono truncate max-w-sm">{projectStore.projectDir() ?? "未选择"}</span>
+                </div>
+
+                <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
+                  <span class="text-[var(--muted)]">Git 环境</span>
+                  <span class="font-mono">{gitVer() ?? "检测中..."}</span>
+                </div>
+              </Show>
+            </div>
+
+            <div class="pt-2">
+              <Button
+                variant="danger"
+                size="sm"
+                icon="i-ri-logout-box-r-line"
+                onClick={handleLogout}
+              >
+                {t("settings.logout")}
+              </Button>
+            </div>
+          </Card>
         </div>
       </Show>
     </div>

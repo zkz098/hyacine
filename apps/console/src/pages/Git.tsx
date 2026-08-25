@@ -1,9 +1,24 @@
-// oxlint-disable typescript/no-unnecessary-type-arguments -- createSignal generics needed for empty/null initial values
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, onMount, Show, For } from "solid-js";
 import { t } from "../i18n";
 import { isTauri, gitExec } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import { Alert } from "../components/Alert";
+import { Button } from "../components/Button";
+import { Input } from "../components/Input";
+import { Card, CardHeader, CardTitle, CardDescription } from "../components/Card";
+import { Badge } from "../components/Badge";
+import { PageHeader } from "../components/PageHeader";
+import { EmptyState } from "../components/EmptyState";
+import {
+  TableContainer,
+  Table,
+  TableHead,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "../components/Table";
+import { toast } from "../components/Toast";
 
 function parsePorcelain(output: string): Array<{ status: string; path: string }> {
   return output
@@ -15,7 +30,6 @@ function parsePorcelain(output: string): Array<{ status: string; path: string }>
       const staged = xy[0] ?? " ";
       const unstaged = xy[1] ?? " ";
       let path = line.slice(3).trim();
-      // 重命名条目形如 "R  old -> new"，取目标路径
       if ((staged === "R" || unstaged === "R") && path.includes(" -> ")) {
         path = path.split(" -> ").pop()?.trim() ?? path;
       }
@@ -30,10 +44,18 @@ function parsePorcelain(output: string): Array<{ status: string; path: string }>
     });
 }
 
+function statusBadgeVariant(
+  status: string,
+): "success" | "warning" | "danger" | "info" | "neutral" {
+  if (status === "新增") return "success";
+  if (status === "修改") return "warning";
+  if (status === "删除") return "danger";
+  if (status === "重命名") return "info";
+  return "neutral";
+}
+
 export function Git(): import("solid-js").JSX.Element {
-  // oxlint-disable-next-line typescript/no-unnecessary-type-arguments -- empty array needs explicit type
   const [statusLines, setStatusLines] = createSignal<Array<{ status: string; path: string }>>([]);
-  // oxlint-disable-next-line typescript/no-unnecessary-type-arguments -- keep explicit
   const [branch, setBranch] = createSignal<string>("");
   const [commitMsg, setCommitMsg] = createSignal(
     `chore: update blog ${new Date().toISOString().slice(0, 10)}`,
@@ -41,8 +63,8 @@ export function Git(): import("solid-js").JSX.Element {
   const [output, setOutput] = createSignal<string>("");
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
+  const [pushing, setPushing] = createSignal(false);
 
-  // oxlint-disable-next-line unicorn/consistent-function-scoping -- captures projectStore
   const cwd = (): string | null => projectStore.projectDir();
 
   const refresh = async (): Promise<void> => {
@@ -85,8 +107,13 @@ export function Git(): import("solid-js").JSX.Element {
       }
       const commit = await gitExec(["commit", "-m", msg], dir);
       setOutput(commit.stdout + commit.stderr);
-      if (commit.code !== 0) setError(commit.stderr || commit.stdout);
-      else await refresh();
+      if (commit.code !== 0) {
+        setError(commit.stderr || commit.stdout);
+        toast.error("Git commit 执行失败");
+      } else {
+        toast.success("Git 提交成功");
+        await refresh();
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -97,115 +124,174 @@ export function Git(): import("solid-js").JSX.Element {
   const handlePush = async (): Promise<void> => {
     const dir = cwd();
     if (dir === null) return;
-    setLoading(true);
+    setPushing(true);
     setError(null);
     setOutput("");
     try {
       const r = await gitExec(["push"], dir);
       setOutput(r.stdout + r.stderr);
-      if (r.code !== 0) setError(r.stderr || r.stdout);
+      if (r.code !== 0) {
+        setError(r.stderr || r.stdout);
+        toast.error("Git push 失败，请检查远端网络与权限");
+      } else {
+        toast.success("已成功推送到远程仓库");
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      setPushing(false);
     }
   };
 
   return (
-    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-6">
+      <PageHeader
+        title={t("git.title")}
+        description="管理本地博客 Git 工作区状态、暂存变更、提交与推送"
+        badge={
+          <Show when={branch()}>
+            <Badge variant="primary" dot icon="i-ri-git-branch-line">
+              {branch()}
+            </Badge>
+          </Show>
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            icon="i-ri-refresh-line"
+            onClick={() => void refresh()}
+          >
+            {t("common.refresh")}
+          </Button>
+        }
+      />
+
       <Show when={!isTauri()}>
         <Alert variant="info">{t("workspace.requireTauri")}</Alert>
       </Show>
 
-      <div class="flex items-center justify-between">
-        <h1 class="text-xl font-bold">{t("git.title")}</h1>
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          class="px-3 py-1.5 rounded border border-[var(--border)] text-sm hover:bg-[var(--surface)]"
-        >
-          <span class="i-ri-refresh-line mr-1" />
-          {t("common.refresh")}
-        </button>
-      </div>
-
       <Show when={cwd() === null}>
-        <Alert variant="info">{t("workspace.empty")}</Alert>
+        <EmptyState
+          icon="i-ri-folder-open-line"
+          title={t("workspace.empty")}
+          description="请先在「工作台」中打开一个博客项目以使用 Git 版本控制功能"
+        />
       </Show>
 
       <Show when={cwd() !== null}>
-        <div class="surface p-4 flex flex-col gap-3">
-          <div class="text-sm">
-            <span class="text-muted">分支：</span>
-            <span class="font-mono text-xs bg-[var(--bg)] border border-[var(--border)] px-2 py-1 rounded">
-              {branch() || "—"}
-            </span>
-            <span class="ml-2 text-muted">目录：</span>
-            <span class="font-mono text-xs">{cwd()}</span>
-          </div>
+        <div class="flex flex-col gap-5">
+          {/* Workspace Path Card */}
+          <Card class="bg-gradient-to-r from-[var(--surface)] to-[var(--g-1)]">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="i-ri-git-repository-line text-lg text-[var(--accent)]" />
+                <span class="font-semibold text-[var(--text)]">当前仓库目录：</span>
+                <span class="font-mono text-[var(--muted)]">{cwd()}</span>
+              </div>
+              <Badge variant="neutral">
+                {statusLines().length === 0 ? "工作区干净" : `${statusLines().length} 项待提交变更`}
+              </Badge>
+            </div>
+          </Card>
 
           <Show when={error() !== null}>
-            <Alert variant="error">{error()}</Alert>
+            <Alert variant="error" title="Git 操作错误">
+              {error()}
+            </Alert>
           </Show>
 
-          <Show when={statusLines().length === 0}>
-            <p class="text-sm text-muted">工作区干净</p>
-          </Show>
+          {/* Changed Files */}
+          <div class="flex flex-col gap-3">
+            <h3 class="text-sm font-semibold text-[var(--text)]">文件变更列表</h3>
 
-          <Show when={statusLines().length > 0}>
-            <div class="border border-[var(--border)] rounded overflow-auto max-h-64">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b border-[var(--border)] text-left text-xs text-muted">
-                    <th class="px-3 py-1">状态</th>
-                    <th class="px-3 py-1">文件</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {statusLines().map((e) => (
-                    <tr class="border-b border-[var(--border)] last:border-0">
-                      <td class="px-3 py-1 text-xs">{e.status}</td>
-                      <td class="px-3 py-1 font-mono text-xs">{e.path}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Show>
-
-          <label class="flex flex-col gap-1 text-sm">
-            <span>提交信息</span>
-            <input
-              value={commitMsg()}
-              onInput={(e) => setCommitMsg(e.currentTarget.value)}
-              class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-            />
-          </label>
-
-          <div class="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void handleCommit()}
-              disabled={loading()}
-              class="px-4 py-2 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            <Show
+              when={statusLines().length > 0}
+              fallback={
+                <Card class="p-6 text-center text-xs text-[var(--muted)] flex items-center justify-center gap-2">
+                  <span class="i-ri-checkbox-circle-line text-base text-[var(--ok)]" />
+                  <span>工作区干净，暂无未提交的更改</span>
+                </Card>
+              }
             >
-              {t("git.commit")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handlePush()}
-              disabled={loading()}
-              class="px-4 py-2 rounded border border-[var(--border)] text-sm hover:bg-[var(--surface)] disabled:opacity-50"
-            >
-              {t("git.push")}
-            </button>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow hoverable={false}>
+                      <TableHeader class="w-[20%]">变更类型</TableHeader>
+                      <TableHeader class="w-[80%]">文件路径</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <For each={statusLines()}>
+                      {(e) => (
+                        <TableRow>
+                          <TableCell>
+                            <Badge variant={statusBadgeVariant(e.status)} size="sm">
+                              {e.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span class="font-mono text-xs text-[var(--text)]">{e.path}</span>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </For>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Show>
           </div>
 
-          <Show when={output().length > 0}>
-            <pre class="text-xs bg-[var(--bg)] border border-[var(--border)] rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap">
-              {output()}
-            </pre>
-          </Show>
+          {/* Commit & Push Form */}
+          <Card class="flex flex-col gap-4">
+            <CardHeader>
+              <div>
+                <CardTitle>提交并推送至远端</CardTitle>
+                <CardDescription>自动执行 git add -A 并创建本地 Commit</CardDescription>
+              </div>
+            </CardHeader>
+
+            <Input
+              label="提交信息 (Commit Message)"
+              value={commitMsg()}
+              onInput={(e) => setCommitMsg(e.currentTarget.value)}
+              placeholder="chore: update blog..."
+              icon="i-ri-message-3-line"
+            />
+
+            <div class="flex items-center gap-2.5 pt-1">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={loading()}
+                disabled={statusLines().length === 0}
+                icon="i-ri-git-commit-line"
+                onClick={() => void handleCommit()}
+              >
+                {t("git.commit")}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                loading={pushing()}
+                icon="i-ri-upload-2-line"
+                onClick={() => void handlePush()}
+              >
+                {t("git.push")}
+              </Button>
+            </div>
+
+            <Show when={output().length > 0}>
+              <div class="mt-2 flex flex-col gap-1">
+                <span class="text-[11px] font-semibold text-[var(--muted)]">终端输出</span>
+                <pre class="text-xs bg-[var(--g-1)] border border-[var(--border)] rounded-[4px] p-3 overflow-auto max-h-48 whitespace-pre-wrap font-mono leading-relaxed text-[var(--text)]">
+                  {output()}
+                </pre>
+              </div>
+            </Show>
+          </Card>
         </div>
       </Show>
     </div>

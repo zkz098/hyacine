@@ -8,10 +8,17 @@ import { projectStore } from "../store/project";
 import { parseFrontmatter, materializeSummary } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
 import { getCollections, type Collection, type CollectionFieldUi } from "@hyacine/contract";
-import { validateFrontmatter, coerceFieldValue } from "../lib/collectionValidate";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
+import { Button } from "../components/Button";
+import { Input } from "../components/Input";
+import { Select } from "../components/Select";
+import { Badge } from "../components/Badge";
+import { Card } from "../components/Card";
+import { SegmentedControl } from "../components/SegmentedControl";
+import { Spinner } from "../components/Spinner";
+import { toast } from "../components/Toast";
 import { ShokaxToolbar } from "../editor/ShokaxToolbar";
 import { renderPreview } from "../editor/preview";
 import { loadEnabledPlugins } from "../editor/syntax/pluginSettings";
@@ -21,13 +28,6 @@ import type { SyntaxPlugin } from "../editor/syntax/types";
 type Mode = "split" | "source" | "preview";
 type FmMode = "form" | "raw";
 type SyncState = "offline" | "synced" | "unsynced";
-const MODES: Mode[] = ["split", "source", "preview"];
-
-const MODE_LABELS: Record<Mode, string> = {
-  split: "分栏",
-  source: "源码",
-  preview: "预览",
-};
 
 /** 把 satteri 渲染出的 DOM 节点挂到容器里 */
 function PreviewMount(props: {
@@ -45,14 +45,13 @@ function PreviewMount(props: {
       ref={(el) => {
         container = el;
       }}
-      class="shokax-preview md min-h-[55vh] overflow-auto"
+      class="shokax-preview md min-h-[60vh] overflow-auto p-4 leading-relaxed"
     />
   );
 }
 
 export function Editor(): import("solid-js").JSX.Element {
   const [searchParams] = useSearchParams();
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- searchParams typed as generic
   const path = (): string => (searchParams.path as string | undefined) ?? "";
 
   const [raw, setRaw] = createSignal<string | null>(null);
@@ -60,7 +59,6 @@ export function Editor(): import("solid-js").JSX.Element {
   const [body, setBody] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [aiLoading, setAiLoading] = createSignal(false);
-  const [msg, setMsg] = createSignal<string | null>(null);
   const [err, setErr] = createSignal<string | null>(null);
 
   // 表单字段
@@ -80,14 +78,13 @@ export function Editor(): import("solid-js").JSX.Element {
 
   // 视图模式：分栏 / 仅源码 / 仅预览
   const [mode, setMode] = createSignal<Mode>("split");
-  // 预览用 satteri 渲染（与博客同管线）
   const isMdxFile = (): boolean => /\.mdx$/i.test(path());
   const [previewSrc, setPreviewSrc] = createSignal("");
-  // 语法插件：启用列表（设置）+ 项目插件（.hyacine/plugins）
   const [enabledPlugins, setEnabledPlugins] = createSignal(loadEnabledPlugins());
   const [userPlugins, setUserPlugins] = createSignal<SyntaxPlugin[]>([]);
   const [pluginsError, setPluginsError] = createSignal<string | null>(null);
   const [pluginRevision, setPluginRevision] = createSignal(0);
+
   const [previewNode] = createResource(
     () => [previewSrc(), pluginRevision()] as const,
     ([src]) =>
@@ -102,7 +99,6 @@ export function Editor(): import("solid-js").JSX.Element {
   let taEl: HTMLTextAreaElement | null = null;
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
-  /** 输入防抖后刷新预览（300ms） */
   const handleSourceInput = (value: string): void => {
     setBody(value);
     setDirty(true);
@@ -110,18 +106,17 @@ export function Editor(): import("solid-js").JSX.Element {
     debounceId = setTimeout(() => setPreviewSrc(value), 300);
   };
 
-  /** 工具栏 / 加载 / AI 摘要等外部变更立即刷新预览 */
   const setSourceImmediate = (value: string): void => {
     setPreviewSrc(value);
   };
 
-  /** 在光标处插入 ShokaX 骨架文本 */
   const insertSnippet = (text: string): void => {
     const cur = body();
     const start = taEl?.selectionStart ?? cur.length;
     const end = taEl?.selectionEnd ?? start;
     const next = cur.slice(0, start) + text + cur.slice(end);
     setBody(next);
+    setDirty(true);
     setSourceImmediate(next);
     const pos = start + text.length;
     requestAnimationFrame(() => {
@@ -133,12 +128,10 @@ export function Editor(): import("solid-js").JSX.Element {
   const fullPath = (): string | null => {
     const dir = projectStore.projectDir();
     const p = path();
-    // path 为 repo 相对（src/posts/hello.md、src/moments/foo.md）
     if (dir === null || p.length === 0) return null;
     return `${dir}/${p}`;
   };
 
-  /** 当前文章的集合（由 path 前缀匹配集合注册表；无产物时回退 null） */
   const currentCollection = (): Collection | null => {
     const cfg = projectStore.projectConfig();
     const cf = projectStore.collectionsFile();
@@ -149,7 +142,6 @@ export function Editor(): import("solid-js").JSX.Element {
     return cf.collections.find((c) => c.name === name) ?? null;
   };
 
-  /** 表单硬编码字段之外的集合字段（schema 驱动渲染） */
   const CORE_FIELDS = new Set(["title", "slug", "categories", "tags", "draft", "date"]);
   const extraFields = (): CollectionFieldUi[] => {
     const c = currentCollection();
@@ -164,7 +156,7 @@ export function Editor(): import("solid-js").JSX.Element {
           f.kind === "string[]"),
     );
   };
-  /** 扩展字段表单值（字符串形态；boolean 用 "true"/"false"） */
+
   const [extras, setExtras] = createSignal<Record<string, string>>({});
 
   const seedExtras = (data: Record<string, unknown>): void => {
@@ -193,17 +185,16 @@ export function Editor(): import("solid-js").JSX.Element {
       setTitle(typeof parsed.data.title === "string" ? parsed.data.title : "");
       setSlug(typeof parsed.data.slug === "string" ? parsed.data.slug : "");
       const cats = parsed.data.categories;
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- categories is string[] in frontmatter
       if (Array.isArray(cats)) setCategories((cats as string[]).join(", "));
       else if (typeof cats === "string") setCategories(cats);
       else setCategories("");
       const tg = parsed.data.tags;
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- tags is string[]
       if (Array.isArray(tg)) setTags((tg as string[]).join(", "));
       else if (typeof tg === "string") setTags(tg);
       else setTags("");
       setDraft(parsed.data.draft === true);
       setDate(typeof parsed.data.date === "string" ? parsed.data.date : "");
+      seedExtras(parsed.data);
       setDirty(false);
       setSyncState(apiStore.isAuthed() ? "unsynced" : "offline");
     } catch (e: unknown) {
@@ -219,7 +210,6 @@ export function Editor(): import("solid-js").JSX.Element {
       }
     };
     window.addEventListener("keydown", handler);
-    // 设置页切换插件后返回：重建预览
     const onPluginsChanged = (): void => {
       setEnabledPlugins(loadEnabledPlugins());
       setPluginRevision((r) => r + 1);
@@ -232,7 +222,6 @@ export function Editor(): import("solid-js").JSX.Element {
     };
   });
 
-  /** 读取项目级插件（.hyacine/plugins/*.js）并刷新预览 */
   const resolveProjectPlugins = async (): Promise<void> => {
     const dir = projectStore.projectDir();
     if (dir === null) return;
@@ -251,7 +240,6 @@ export function Editor(): import("solid-js").JSX.Element {
   };
 
   createEffect(() => {
-    // 当 path 变化重新加载（含首次）
     void path();
     void load();
   });
@@ -277,10 +265,8 @@ export function Editor(): import("solid-js").JSX.Element {
     return data;
   };
 
-  /** 完整文件文本（frontmatter + 正文），保存/上行共用 */
   const buildFullText = async (): Promise<{ out: string; data: Record<string, unknown> }> => {
     if (fmMode() === "raw") {
-      // raw 模式：以原文 frontmatter 为准（保留任意扩展键，也可删键）
       const parsed: unknown = yamlParse(fmRawText(), { schema: "core" });
       const data =
         parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
@@ -294,7 +280,6 @@ export function Editor(): import("solid-js").JSX.Element {
     return { data, out: stringifyFrontmatter(data, body()) };
   };
 
-  /** 保存后（或按钮）把完整文件上行到 API（需登录；Primary 下自动触发 git 导出） */
   const syncToApi = async (fullText: string): Promise<void> => {
     if (!apiStore.isAuthed()) {
       setSyncState("offline");
@@ -320,19 +305,18 @@ export function Editor(): import("solid-js").JSX.Element {
     if (fp === null) return;
     setSaving(true);
     setErr(null);
-    setMsg(null);
     try {
       const { out } = await buildFullText();
       const finalOut = out.endsWith("\n") ? out : `${out}\n`;
       await writeTextFile(fp, finalOut);
       setDirty(false);
-      setMsg(t("editor.saved"));
+      toast.success(title() || path(), "文章已保存");
       await projectStore.refreshPosts();
-      // 登录时自动上行，状态提示同步到 API 与否
       if (apiStore.isAuthed()) void syncToApi(finalOut);
       else setSyncState("offline");
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : String(e), "保存失败");
     } finally {
       setSaving(false);
     }
@@ -342,22 +326,20 @@ export function Editor(): import("solid-js").JSX.Element {
     const fp = fullPath();
     if (fp === null) return;
     setErr(null);
-    setMsg(null);
     try {
       const { out } = await buildFullText();
       const finalOut = out.endsWith("\n") ? out : `${out}\n`;
       await syncToApi(finalOut);
-      if (syncState() === "synced") setMsg("已同步到 API");
+      if (syncState() === "synced") toast.success("文章已同步至云端 API");
     } catch (e: unknown) {
       setErr(messageOf(e));
+      toast.error(messageOf(e), "同步失败");
     }
   };
 
-  /** form ⇄ raw 切换：同步两边内容 */
   const switchFmMode = (next: FmMode): void => {
     if (next === fmMode()) return;
     if (next === "raw") {
-      // 用当前表单数据序列化出 frontmatter 原文（body 置空仅取 fm 块）
       void import("../lib/frontmatter").then((m) => {
         setFmRawText(m.stringifyFrontmatter(buildFrontmatter(), ""));
       });
@@ -386,13 +368,12 @@ export function Editor(): import("solid-js").JSX.Element {
           seedExtras(f);
         }
       } catch {
-        // raw 非法时保持原样，不覆盖表单
+        // raw 非法时保持原样
       }
       setFmMode("form");
     }
   };
 
-  /** 扩展字段渲染（按 kind，来自集合 schema） */
   const renderExtraField = (f: CollectionFieldUi): import("solid-js").JSX.Element => {
     const value = (): string => extras()[f.key] ?? "";
     const set = (v: string): void => {
@@ -400,67 +381,46 @@ export function Editor(): import("solid-js").JSX.Element {
       setDirty(true);
     };
     const label = (): string => `${f.key}${f.required ? " *" : ""}`;
+
     if (f.kind === "enum") {
       return (
-        <label class="flex flex-col gap-1 text-sm">
-          <span>{label()}</span>
-          <select
-            value={value()}
-            onChange={(e) => set(e.currentTarget.value)}
-            class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-          >
-            <option value="">—</option>
-            {(f.values ?? []).map((v) => (
-              <option value={v}>{v}</option>
-            ))}
-          </select>
-        </label>
+        <Select
+          label={label()}
+          value={value()}
+          onChange={(e) => set(e.currentTarget.value)}
+          options={[{ label: "—", value: "" }, ...(f.values ?? []).map((v) => ({ label: v, value: v }))]}
+        />
       );
     }
     if (f.kind === "boolean") {
       return (
-        <label class="flex items-center gap-2 text-sm">
+        <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-1">
           <input
             type="checkbox"
             checked={value() === "true"}
             onChange={(e) => set(e.currentTarget.checked ? "true" : "")}
+            class="rounded text-[var(--accent)]"
           />
           <span>{f.key}</span>
         </label>
       );
     }
-    if (f.kind === "string[]") {
-      return (
-        <label class="flex flex-col gap-1 text-sm">
-          <span>{label()}（逗号分隔）</span>
-          <input
-            value={value()}
-            onInput={(e) => set(e.currentTarget.value)}
-            placeholder={f.image === true ? "图片路径列表" : ""}
-            class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-          />
-        </label>
-      );
-    }
     return (
-      <label class="flex flex-col gap-1 text-sm">
-        <span>{label()}</span>
-        <input
-          type={f.secret === true ? "password" : "text"}
-          value={value()}
-          onInput={(e) => set(e.currentTarget.value)}
-          placeholder={
-            f.secret === true
-              ? "（不回显）"
-              : f.image === true
-                ? "图片路径（src/assets/...）"
-                : f.kind === "date"
-                  ? "YYYY-MM-DD"
-                  : ""
-          }
-          class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
-        />
-      </label>
+      <Input
+        label={label()}
+        type={f.secret === true ? "password" : "text"}
+        value={value()}
+        onInput={(e) => set(e.currentTarget.value)}
+        placeholder={
+          f.secret === true
+            ? "（不回显）"
+            : f.image === true
+              ? "图片路径（src/assets/...）"
+              : f.kind === "date"
+                ? "YYYY-MM-DD"
+                : ""
+        }
+      />
     );
   };
 
@@ -469,11 +429,11 @@ export function Editor(): import("solid-js").JSX.Element {
     if (fp === null) return;
     if (!apiStore.isAuthed()) {
       setErr(t("error.unauthorized"));
+      toast.warning("需要先连接 API 云端才能生成 AI 摘要");
       return;
     }
     setAiLoading(true);
     setErr(null);
-    setMsg(null);
     try {
       const data = buildFrontmatter();
       const { stringifyFrontmatter } = await import("../lib/frontmatter");
@@ -494,14 +454,14 @@ export function Editor(): import("solid-js").JSX.Element {
       setFrontData(reparsed.data);
       setBody(reparsed.content);
       setFmRawText(reparsed.matter);
-      // 摘要落地后同步源码与预览（修复"处理后不自动重渲染"）
       setSourceImmediate(reparsed.content);
       setDirty(false);
-      setMsg(t("editor.aiDone"));
+      toast.success(t("editor.aiDone"));
       await projectStore.refreshPosts();
       if (apiStore.isAuthed()) void syncToApi(updated.endsWith("\n") ? updated : `${updated}\n`);
     } catch (e: unknown) {
       setErr(messageOf(e));
+      toast.error(messageOf(e), "生成摘要失败");
     } finally {
       setAiLoading(false);
     }
@@ -513,129 +473,125 @@ export function Editor(): import("solid-js").JSX.Element {
         <Alert variant="info">{t("workspace.requireTauri")}</Alert>
       </Show>
 
-      <div class="flex items-center gap-2">
-        <a href="#/workspace" class="text-sm text-muted hover:text-[var(--text)]">
-          ← {t("workspace.title")}
-        </a>
-        <span class="text-sm font-mono text-xs bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded text-mono">
-          {path() || "—"}
-        </span>
-        <div class="ml-auto flex gap-2">
-          {/* 状态提示：本地保存 / API 同步 */}
-          <span
-            class={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
-              dirty()
-                ? "text-[var(--warning)] border-[var(--note-warning-border)] bg-[var(--note-warning-bg)]"
-                : "text-[var(--ok)] border-[var(--note-success-border)] bg-[var(--note-success-bg)]"
-            }`}
+      {/* Editor Top Bar */}
+      <div class="surface p-3 border border-[var(--border)] rounded-[6px] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div class="flex items-center gap-2 flex-wrap">
+          <a
+            href="#/workspace"
+            class="text-xs font-medium text-[var(--muted)] hover:text-[var(--text)] flex items-center gap-1 transition-colors"
           >
-            <span class={dirty() ? "i-ri-close-circle-line" : "i-ri-check-double-line"} />
-            {dirty() ? "本地：未保存" : "本地：已保存"}
+            <span class="i-ri-arrow-left-line" />
+            {t("workspace.title")}
+          </a>
+          <span class="text-[var(--border)]">/</span>
+          <span class="font-mono text-xs bg-[var(--g-1)] border border-[var(--border)] px-2 py-0.5 rounded-[4px] text-[var(--text)] truncate max-w-xs">
+            {path() || "未指定文章"}
           </span>
-          <span
-            class={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded border ${
-              syncState() === "synced"
-                ? "text-[var(--ok)] border-[var(--note-success-border)] bg-[var(--note-success-bg)]"
-                : syncState() === "offline"
-                  ? "text-muted border-[var(--border)]"
-                  : "text-[var(--warning)] border-[var(--note-warning-border)] bg-[var(--note-warning-bg)]"
-            }`}
+
+          <Badge variant={dirty() ? "warning" : "success"} size="sm" dot>
+            {dirty() ? "未保存" : "已保存"}
+          </Badge>
+
+          <Badge
+            variant={syncState() === "synced" ? "success" : syncState() === "offline" ? "neutral" : "warning"}
+            size="sm"
+            dot
           >
-            <span
-              class={
-                syncState() === "synced"
-                  ? "i-ri-check-double-line"
-                  : syncState() === "offline"
-                    ? "i-ri-cloud-off-line"
-                    : "i-ri-close-circle-line"
-              }
-            />
             {syncState() === "synced"
-              ? "API：已同步"
+              ? "API 已同步"
               : syncState() === "offline"
-                ? "API：未登录"
-                : "API：未同步"}
-          </span>
-          <button
-            type="button"
+                ? "API 离线"
+                : "API 待同步"}
+          </Badge>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            loading={syncingToApi()}
+            disabled={!apiStore.isAuthed() || raw() === null}
+            icon="i-ri-cloud-upload-line"
             onClick={() => void handleSyncNow()}
-            disabled={syncingToApi() || !apiStore.isAuthed()}
-            title="把当前文件单篇上行到 API（需登录）"
-            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm hover:bg-[var(--surface)] disabled:opacity-50"
+            title="把当前文件单篇上行到 API"
           >
-            <span class="i-ri-cloud-upload-line mr-1" />
-            {syncingToApi() ? t("common.loading") : "同步到 API"}
-          </button>
-          <button
-            type="button"
+            同步到 API
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={aiLoading()}
+            disabled={raw() === null}
+            icon="i-ri-sparkling-line"
             onClick={() => void handleAiSummary()}
-            disabled={aiLoading() || raw() === null}
-            class="px-3 py-1.5 rounded border border-[var(--border)] text-sm hover:bg-[var(--surface)] disabled:opacity-50"
           >
-            <span class="i-ri-sparkling-line mr-1" />
             {aiLoading() ? t("editor.aiLoading") : t("editor.aiSummary")}
-          </button>
-          <button
-            type="button"
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            loading={saving()}
+            disabled={raw() === null}
+            icon="i-ri-save-line"
             onClick={() => void handleSave()}
-            disabled={saving() || raw() === null}
-            class="px-4 py-1.5 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50"
           >
-            {saving() ? t("common.loading") : t("editor.save")}
-          </button>
+            {saving() ? t("common.loading") : `${t("editor.save")} (Ctrl+S)`}
+          </Button>
         </div>
       </div>
 
       <Show when={err() !== null}>
-        <Alert variant="error">{err()}</Alert>
+        <Alert variant="error" title="错误提示">
+          {err()}
+        </Alert>
       </Show>
+
       <Show when={pluginsError() !== null}>
-        <Alert variant="warning">{pluginsError()}</Alert>
-      </Show>
-      <Show when={msg() !== null}>
-        <Alert variant="info">{msg()}</Alert>
+        <Alert variant="warning" title="插件提示">
+          {pluginsError()}
+        </Alert>
       </Show>
 
+      {/* When no post is selected */}
       <Show when={raw() === null && path().length === 0}>
-        <div class="surface p-8 flex flex-col items-center gap-3 text-center">
-          <p class="text-sm text-muted">未打开任何文章 —— 请先在工作台选择一个项目并打开文章</p>
-          <a
-            href="#/workspace"
-            class="px-4 py-2 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)]"
-          >
-            ← {t("workspace.title")}
+        <Card class="p-12 flex flex-col items-center justify-center text-center gap-3">
+          <span class="i-ri-quill-pen-line text-4xl text-[var(--muted)]" />
+          <h3 class="text-sm font-semibold">未打开任何文章</h3>
+          <p class="text-xs text-[var(--muted)]">请先在工作台中选择一篇文章或创建新文章</p>
+          <a href="#/workspace">
+            <Button variant="primary" size="sm" icon="i-ri-folder-open-line">
+              前往工作台
+            </Button>
           </a>
-        </div>
+        </Card>
       </Show>
 
-      <Show when={raw() === null && path().length > 0}>
-        <p class="text-sm text-muted">{t("common.loading")}</p>
-      </Show>
-
+      {/* Editor Main Grid */}
       <Show when={raw() !== null}>
-        <div class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <div class="surface p-4 flex flex-col gap-3 h-fit">
-            <h2 class="font-semibold text-sm">{t("editor.frontmatter")}</h2>
-            <div class="flex items-center gap-1 rounded border border-[var(--border)] p-0.5 bg-[var(--surface)] w-fit">
-              {(["form", "raw"] as FmMode[]).map((m) => (
-                <button
-                  type="button"
-                  onClick={() => switchFmMode(m)}
-                  class={`px-2.5 py-1 text-xs rounded ${
-                    fmMode() === m
-                      ? "bg-[var(--accent)] text-white"
-                      : "text-[var(--muted)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {m === "form" ? "表单" : "原文"}
-                </button>
-              ))}
+        <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 items-start">
+          {/* Frontmatter Sidebar */}
+          <Card class="flex flex-col gap-3">
+            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+              <span class="font-semibold text-xs text-[var(--text)] uppercase tracking-wider">
+                {t("editor.frontmatter")}
+              </span>
+              <SegmentedControl<FmMode>
+                value={fmMode()}
+                onChange={switchFmMode}
+                size="xs"
+                items={[
+                  { value: "form", label: "表单" },
+                  { value: "raw", label: "YAML" },
+                ]}
+              />
             </div>
 
             <Show when={fmMode() === "raw"}>
-              <label class="flex flex-col gap-1 text-sm">
-                <span class="text-muted">
-                  frontmatter YAML 全文（可编辑任意键 / 增删一键，保存时解析）
+              <div class="flex flex-col gap-1.5">
+                <span class="text-[11px] text-[var(--muted)]">
+                  YAML 原文（可增删修改任意属性，保存时自动解析）
                 </span>
                 <textarea
                   value={fmRawText()}
@@ -644,133 +600,154 @@ export function Editor(): import("solid-js").JSX.Element {
                     setDirty(true);
                   }}
                   spellcheck={false}
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-mono text-xs min-h-[30vh] resize-y"
+                  class="w-full p-2.5 rounded-[4px] border border-[var(--border)] bg-[var(--bg)] font-mono text-xs min-h-[45vh] resize-y focus:outline-none focus:border-[var(--accent)] leading-relaxed"
                 />
-              </label>
+              </div>
             </Show>
 
             <Show when={fmMode() === "form"}>
-              <label class="flex flex-col gap-1 text-sm">
-                <span>标题</span>
-                <input
+              <div class="flex flex-col gap-3">
+                <Input
+                  label="文章标题"
                   value={title()}
                   onInput={(e) => {
                     setTitle(e.currentTarget.value);
                     setDirty(true);
                   }}
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="文章标题"
                 />
-              </label>
-              <label class="flex flex-col gap-1 text-sm">
-                <span>slug</span>
-                <input
+
+                <Input
+                  label="Slug"
                   value={slug()}
                   onInput={(e) => {
                     setSlug(e.currentTarget.value);
                     setDirty(true);
                   }}
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="post-slug"
                 />
-              </label>
-              <label class="flex flex-col gap-1 text-sm">
-                <span>分类（逗号分隔）</span>
-                <input
+
+                <Input
+                  label="分类 (逗号分隔)"
                   value={categories()}
                   onInput={(e) => {
                     setCategories(e.currentTarget.value);
                     setDirty(true);
                   }}
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="技术, 前端"
                 />
-              </label>
-              <label class="flex flex-col gap-1 text-sm">
-                <span>标签（逗号分隔）</span>
-                <input
+
+                <Input
+                  label="标签 (逗号分隔)"
                   value={tags()}
                   onInput={(e) => {
                     setTags(e.currentTarget.value);
                     setDirty(true);
                   }}
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="solidjs, shokax"
                 />
-              </label>
-              <label class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={draft()}
-                  onChange={(e) => {
-                    setDraft(e.currentTarget.checked);
-                    setDirty(true);
-                  }}
-                />
-                <span>草稿</span>
-              </label>
-              <label class="flex flex-col gap-1 text-sm">
-                <span>日期</span>
-                <input
+
+                <Input
+                  label="发布日期"
                   value={date()}
                   onInput={(e) => {
                     setDate(e.currentTarget.value);
                     setDirty(true);
                   }}
-                  placeholder="2026-08-24"
-                  class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                  placeholder="YYYY-MM-DD"
                 />
-              </label>
-              <Show when={extraFields().length > 0 && fmMode() === "form"}>
-                <div class="border-t border-[var(--border)] pt-3 mt-1 flex flex-col gap-2">
-                  <p class="text-xs text-muted">扩展字段（来自 Astro 集合 schema）</p>
-                  <For each={extraFields()}>{(f) => renderExtraField(f)}</For>
-                </div>
-              </Show>
-            </Show>
-          </div>
 
-          <div class="flex flex-col gap-2">
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="flex items-center gap-1 rounded border border-[var(--border)] p-0.5 bg-[var(--surface)]">
-                {MODES.map((m) => (
-                  <button
-                    type="button"
-                    onClick={() => setMode(m)}
-                    class={`px-2.5 py-1 text-xs rounded ${
-                      mode() === m
-                        ? "bg-[var(--accent)] text-white"
-                        : "text-[var(--muted)] hover:text-[var(--text)]"
-                    }`}
-                  >
-                    {MODE_LABELS[m]}
-                  </button>
-                ))}
+                <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-1">
+                  <input
+                    type="checkbox"
+                    checked={draft()}
+                    onChange={(e) => {
+                      setDraft(e.currentTarget.checked);
+                      setDirty(true);
+                    }}
+                    class="rounded text-[var(--accent)]"
+                  />
+                  <span>设为草稿 (Draft)</span>
+                </label>
+
+                <Show when={extraFields().length > 0}>
+                  <div class="border-t border-[var(--border)] pt-3 mt-1 flex flex-col gap-2.5">
+                    <span class="text-[11px] font-semibold text-[var(--muted)]">
+                      扩展字段 (Astro Schema)
+                    </span>
+                    <For each={extraFields()}>{(f) => renderExtraField(f)}</For>
+                  </div>
+                </Show>
               </div>
-              <ShokaxToolbar insertText={insertSnippet} />
-              {isPreviewBusy() ? (
-                <span class="text-xs text-muted">{t("common.loading")}</span>
-              ) : null}
-              <Show when={previewNode.error}>
-                <Alert variant="error">预览渲染失败：{messageOf(previewNode.error)}</Alert>
+            </Show>
+          </Card>
+
+          {/* Right Main Editor & Preview Workspace */}
+          <div class="flex flex-col gap-3">
+            {/* Editor Toolbar */}
+            <div class="surface p-2.5 border border-[var(--border)] rounded-[6px] flex flex-wrap items-center justify-between gap-2 shadow-xs">
+              <div class="flex items-center gap-2 flex-wrap">
+                <SegmentedControl<Mode>
+                  value={mode()}
+                  onChange={setMode}
+                  size="xs"
+                  items={[
+                    { value: "split", label: "分栏", icon: "i-ri-layout-column-line" },
+                    { value: "source", label: "源码", icon: "i-ri-code-line" },
+                    { value: "preview", label: "预览", icon: "i-ri-eye-line" },
+                  ]}
+                />
+                <div class="h-4 w-px bg-[var(--border)] mx-1" />
+                <ShokaxToolbar insertText={insertSnippet} />
+              </div>
+
+              <Show when={isPreviewBusy()}>
+                <div class="flex items-center gap-1.5 text-xs text-[var(--muted)] pr-2">
+                  <Spinner size="xs" />
+                  <span>渲染预览中...</span>
+                </div>
               </Show>
             </div>
 
+            <Show when={previewNode.error}>
+              <Alert variant="error" title="预览渲染失败">
+                {messageOf(previewNode.error)}
+              </Alert>
+            </Show>
+
+            {/* Split / Source / Preview Container */}
             <div
               class={
-                mode() === "split" ? "grid grid-cols-1 xl:grid-cols-2 gap-2" : "flex flex-col gap-2"
+                mode() === "split"
+                  ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
+                  : "flex flex-col gap-3"
               }
             >
               {(mode() === "split" || mode() === "source") && (
-                <textarea
-                  ref={(el) => {
-                    taEl = el;
-                  }}
-                  value={body()}
-                  onInput={(e) => handleSourceInput(e.currentTarget.value)}
-                  class="w-full min-h-[55vh] p-3 rounded border border-[var(--border)] bg-[var(--bg)] text-mono text-sm leading-relaxed resize-y focus:outline-none focus:border-[var(--accent)]"
-                  spellcheck={false}
-                  placeholder="Markdown / MDX 源码…"
-                />
+                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none">
+                    <span>Markdown / MDX 源码</span>
+                    <span>{body().length} 字符</span>
+                  </div>
+                  <textarea
+                    ref={(el) => {
+                      taEl = el;
+                    }}
+                    value={body()}
+                    onInput={(e) => handleSourceInput(e.currentTarget.value)}
+                    class="w-full min-h-[62vh] p-4 bg-[var(--bg)] font-mono text-xs sm:text-sm leading-relaxed resize-y focus:outline-none focus:ring-0 text-[var(--text)] selection:bg-[var(--accent)] selection:text-white"
+                    spellcheck={false}
+                    placeholder="开始书写 Markdown / MDX 精彩内容..."
+                  />
+                </div>
               )}
+
               {(mode() === "split" || mode() === "preview") && (
-                <div class="surface p-4 rounded min-h-[55vh]">
+                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none">
+                    <span>ShokaX 实时预览 (Satteri)</span>
+                    <span class="text-[10px] text-[var(--ok)]">✓ 已同步渲染</span>
+                  </div>
                   <PreviewMount node={previewNode()} />
                 </div>
               )}
