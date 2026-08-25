@@ -3,15 +3,22 @@ import { createEffect, onCleanup, onMount } from "solid-js";
 interface Props {
   initialMarkdown: string;
   onChange: (markdown: string) => void;
+  /** 编辑器就绪后回调，用于在光标处插入 ShokaX 骨架文本 */
+  onReady?: (api: { insertText: (text: string) => void }) => void;
+}
+
+interface EditorApi {
+  destroy: () => void;
+  insertText: (text: string) => void;
 }
 
 export function MilkdownEditor(props: Props): import("solid-js").JSX.Element {
   // oxlint-disable-next-line eslint/no-unassigned-vars -- SolidJS ref assigns via JSX
   let container!: HTMLDivElement;
-  let editor: { destroy: () => void } | null = null;
+  let editor: EditorApi | null = null;
 
   onMount(async () => {
-    const { Editor, rootCtx, defaultValueCtx } = await import("@milkdown/core");
+    const { Editor, rootCtx, defaultValueCtx, editorViewCtx } = await import("@milkdown/core");
     const { commonmark } = await import("@milkdown/preset-commonmark");
     const { history } = await import("@milkdown/plugin-history");
     const { listener, listenerCtx } = await import("@milkdown/plugin-listener");
@@ -33,8 +40,23 @@ export function MilkdownEditor(props: Props): import("solid-js").JSX.Element {
       .use(listener)
       .create();
 
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrow to destroy handle
-    editor = ed as unknown as { destroy: () => void };
+    const handle: EditorApi = {
+      destroy: () => {
+        void ed.destroy();
+      },
+      // 在光标处插入字面量骨架文本（保存时原样写回 .mdx，交由 ShokaX 渲染）
+      insertText: (text: string) => {
+        ed.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const { state, dispatch } = view;
+          dispatch(state.tr.insertText(text, state.selection.from, state.selection.to));
+          view.focus();
+        });
+      },
+    };
+
+    editor = handle;
+    props.onReady?.(handle);
   });
 
   createEffect(() => {

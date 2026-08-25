@@ -9,6 +9,7 @@ import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 import { MilkdownEditor } from "../components/MilkdownEditor";
+import { ShokaxToolbar } from "../editor/ShokaxToolbar";
 
 export function Editor(): import("solid-js").JSX.Element {
   const [searchParams] = useSearchParams();
@@ -33,6 +34,13 @@ export function Editor(): import("solid-js").JSX.Element {
   // 每次成功加载一篇文章后 +1，用它在 <For> 里按版本 remount Milkdown 编辑器，
   // 这样同一路由下切换 ?path=A -> ?path=B 时编辑器内容也跟着换（默认只在挂载时设置）。
   const [docVersion, setDocVersion] = createSignal(0);
+  // Milkdown 就绪后暴露的插入 API（供 ShokaX 工具栏在光标处插骨架）
+  const [editorApi, setEditorApi] = createSignal<{
+    insertText: (text: string) => void;
+  } | null>(null);
+  const insertText = (text: string): void => {
+    editorApi()?.insertText(text);
+  };
 
   const fullPath = (): string | null => {
     const dir = projectStore.projectDir();
@@ -268,10 +276,15 @@ export function Editor(): import("solid-js").JSX.Element {
           </div>
 
           <div class="flex flex-col gap-2">
+            <ShokaxToolbar insertText={insertText} />
             {/* 用 docVersion 作 key：切换文章时 remount，避免编辑器显示旧内容 */}
             <For each={[docVersion()]}>
               {() => (
-                <MilkdownEditor initialMarkdown={body()} onChange={(md) => setBody(md)} />
+                <MilkdownEditor
+                  initialMarkdown={body()}
+                  onChange={(md) => setBody(md)}
+                  onReady={(api) => setEditorApi(api)}
+                />
               )}
             </For>
           </div>
