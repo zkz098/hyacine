@@ -1,6 +1,6 @@
 // oxlint-disable typescript/no-unsafe-type-assertion, eslint/no-await-in-loop
 import { Hono } from "hono";
-import { PostUpsertRequestSchema, displaySlug } from "@hyacine/contract";
+import { PostUpsertRequestSchema } from "@hyacine/contract";
 import { errorBody } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
 import { defer } from "../utils/defer";
@@ -10,6 +10,31 @@ import { parseFrontmatterMeta } from "../utils/frontmatter";
 import { triggerExportDispatch } from "../utils/github";
 import { enqueueAiNeeds, processAiQueue } from "../utils/aiQueue";
 import type { Env, Variables } from "../types";
+
+function cleanSlugText(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-")
+    .replace(/[^\p{L}\p{N}-]/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-/, "")
+    .replace(/-+$/, "");
+}
+
+/**
+ * 本地轻量 slug：显式 slug 清洗（保留 Unicode）；缺失时用标题清洗兜底（不做拼音）。
+ * 注意：不 import contract 的 slug.ts —— 其顶层加载 pinyin-pro，在 Workers 全局
+ * 作用域会执行 setTimeout → 部署报 10021。Worker bundle 因此与 pinyin-pro 完全解耦。
+ */
+function resolveSlug(dataSlug: unknown, title: string): string {
+  if (typeof dataSlug === "string") {
+    const s = cleanSlugText(dataSlug);
+    if (s.length > 0) return s;
+  }
+  const t = cleanSlugText(title);
+  return t.length > 0 ? t : `post-${Date.now()}`;
+}
 
 /**
  * Primary 模式（双真相源）路由：
@@ -39,8 +64,8 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
         .split("/")
         .pop() ??
       path;
-    // contract displaySlug：显式 slug 保留；缺失按标题生成
-    const slug = displaySlug(meta.slug, title);
+    // 本地轻量 slug（Worker 侧无拼音依赖，见文件头部注释）
+    const slug = resolveSlug(meta.slug, title);
 
     const existing = await c.env.DB.prepare("SELECT hash, created_at FROM posts WHERE path = ?")
       .bind(path)
