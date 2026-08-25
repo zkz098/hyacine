@@ -2,6 +2,8 @@
 
 astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
 
+> 部署指南见 [DEPLOY.md](./DEPLOY.md)（Cloudflare Worker + CLI + 桌面端完整流程）。
+
 ## 组件
 
 | 包                  | 说明                                                           | 运行时                              |
