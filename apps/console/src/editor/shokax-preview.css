@@ -1,0 +1,80 @@
+/* ShokaX 一致性预览样式 = 博客同款 CSS（拷自 astro-blog-shokax/src/styles，作用域 .md）
+ * + 预览容器/code-window 专属样式。
+ * 引用的 token（--grey-* / --text-color / .note.* 等）已在 theme.css 中提供。
+ */
+@import "./shokax-css/post.css";
+@import "./shokax-css/mdx-components.css";
+@import "./shokax-css/spoiler.css";
+@import "./shokax-css/collapse.css";
+
+/* 预览容器 */
+.shokax-preview.md {
+  padding: 0 0.25rem;
+  font-size: 0.95em;
+  line-height: 1.9;
+  overflow-wrap: break-word;
+}
+.shokax-preview.md > :first-child {
+  margin-top: 0;
+}
+.shokax-preview.md > :last-child {
+  margin-bottom: 0;
+}
+
+/* macOS 风格代码窗（替代博客的 <code-block> 自定义元素） */
+.code-window {
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface-code, var(--grey-3));
+  box-shadow: var(--codeblock-shadow, 0.5rem 0.5rem 1rem var(--grey-3));
+  overflow: hidden;
+  font-family: var(--font-mono);
+}
+.code-window__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--surface-code-header, var(--grey-2));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.code-window__dots {
+  display: inline-flex;
+  gap: 0.375rem;
+}
+.code-window__dots i {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--grey-4);
+}
+.code-window__dots i:nth-child(1) {
+  background: var(--codeblock-dot-red, var(--c-red));
+}
+.code-window__dots i:nth-child(2) {
+  background: var(--codeblock-dot-yellow, var(--c-yellow));
+}
+.code-window__dots i:nth-child(3) {
+  background: var(--codeblock-dot-green, var(--c-green));
+}
+.code-window__lang {
+  font-weight: 600;
+}
+.code-window__body {
+  overflow-x: auto;
+  padding: 0.75rem 1rem;
+  background: var(--surface-code, var(--grey-2));
+}
+.code-window__body pre {
+  margin: 0;
+  background: transparent;
+}
+.code-window__body pre.shiki {
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.925rem;
+  line-height: 1.5;
+}

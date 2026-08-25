@@ -138,6 +138,103 @@
   --note-danger-text: oklch(0.54 0.223 20.1);
 }
 
+/* ShokaX 兼容别名：预览 CSS（拷自博客）引用这些 ShokaX 原生 token 名 */
+:root {
+  --grey-0: var(--g-0);
+  --grey-1: var(--g-1);
+  --grey-2: var(--g-2);
+  --grey-3: var(--g-3);
+  --grey-4: var(--g-4);
+  --grey-5: var(--g-5);
+  --grey-6: var(--g-6);
+  --grey-7: var(--g-7);
+  --grey-8: var(--g-8);
+  --grey-9: var(--g-9);
+  --text-color: var(--text);
+  --text-color-muted: var(--muted);
+  --text-color-subtle: var(--g-4);
+  --header-text-color: var(--g-9);
+  --border-color-muted: var(--g-4);
+  --body-bg-shadow: var(--g-1);
+  --box-bg-shadow: oklch(0 0 0 / 0.1);
+  --surfce-code: var(--g-3);
+  --surface-code: var(--g-3);
+  --surface-inline-code: var(--g-2);
+  --surface-inline-code-border: var(--g-3);
+}
+[data-theme="dark"] {
+  --text-color-subtle: var(--g-5);
+  --header-text-color: var(--g-0);
+  --body-bg-shadow: var(--g-0);
+  --box-bg-shadow: oklch(0 0 0 / 0.2);
+  --surface-code: var(--g-3);
+  --surface-inline-code: var(--g-2);
+  --surface-inline-code-border: var(--g-3);
+}
+
+/* Note 上下文类（博客 palette.css：.note.info 等由这些类提供 --note-* 变量） */
+.md .note.primary,
+.primary-note {
+  --note-border: var(--note-primary-border);
+  --note-bg: var(--note-primary-bg);
+  --note-text: var(--note-primary-text);
+  --note-hover: var(--note-primary-text);
+}
+.md .note.info {
+  --note-border: var(--note-info-border);
+  --note-bg: var(--note-info-bg);
+  --note-text: var(--note-info-text);
+  --note-hover: var(--note-info-text);
+}
+.md .note.success {
+  --note-border: var(--note-success-border);
+  --note-bg: var(--note-success-bg);
+  --note-text: var(--note-success-text);
+  --note-hover: var(--note-success-text);
+}
+.md .note.warning {
+  --note-border: var(--note-warning-border);
+  --note-bg: var(--note-warning-bg);
+  --note-text: var(--note-warning-text);
+  --note-hover: var(--note-warning-text);
+}
+.md .note.danger,
+.md .note.error {
+  --note-border: var(--note-danger-border);
+  --note-bg: var(--note-danger-bg);
+  --note-text: var(--note-danger-text);
+  --note-hover: var(--note-danger-text);
+}
+
+/* 语义色类（.red/.green/... 供 Text 组件等使用） */
+.red {
+  color: var(--c-red);
+}
+.pink {
+  color: var(--c-pink);
+}
+.orange {
+  color: var(--c-orange);
+}
+.yellow {
+  color: var(--c-yellow);
+}
+.green {
+  color: var(--c-green);
+}
+.aqua {
+  color: var(--c-aqua);
+}
+.blue {
+  color: var(--c-blue);
+}
+.purple {
+  color: var(--c-purple);
+}
+.grey {
+  color: var(--c-grey);
+}
+
 * {
   box-sizing: border-box;
 }

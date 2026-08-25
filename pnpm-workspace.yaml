@@ -1,6 +1,12 @@
 packages:
   - packages/*
   - apps/*
+# satteri 浏览器端用 WASI 构建（@bruits/satteri-wasm32-wasi, cpu: wasm32）
+# 默认 pnpm 会跳过非当前平台的可选依赖，必须显式声明才能装进来
+supportedArchitectures:
+  cpu:
+    - current
+    - wasm32
 allowBuilds:
   esbuild: true
   workerd: true

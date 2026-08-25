@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createResource, createSignal, onMount, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { t } from "../i18n";
 import { isTauri, readTextFile, writeTextFile } from "../tauri/bridge";
@@ -8,8 +8,28 @@ import { postBodyHash } from "../lib/postHash";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
-import { MilkdownEditor } from "../components/MilkdownEditor";
 import { ShokaxToolbar } from "../editor/ShokaxToolbar";
+import { renderPreview } from "../editor/preview";
+
+type Mode = "split" | "source" | "preview";
+
+const MODE_LABELS: Record<Mode, string> = {
+  split: "分栏",
+  source: "源码",
+  preview: "预览",
+};
+
+/** 把 satteri 渲染出的 DOM 节点挂到容器里 */
+function PreviewMount(props: { node: HTMLElement | null | undefined }): import("solid-js").JSX.Element {
+  let container!: HTMLDivElement;
+  createEffect(() => {
+    container.replaceChildren();
+    if (props.node !== null && props.node !== undefined) {
+      container.append(props.node);
+    }
+  });
+  return <div ref={container} class="shokax-preview md min-h-[55vh] overflow-auto" />;
+}
 
 export function Editor(): import("solid-js").JSX.Element {
   const [searchParams] = useSearchParams();
@@ -31,15 +51,44 @@ export function Editor(): import("solid-js").JSX.Element {
   const [tags, setTags] = createSignal("");
   const [draft, setDraft] = createSignal(false);
   const [date, setDate] = createSignal("");
-  // 每次成功加载一篇文章后 +1，用它在 <For> 里按版本 remount Milkdown 编辑器，
-  // 这样同一路由下切换 ?path=A -> ?path=B 时编辑器内容也跟着换（默认只在挂载时设置）。
-  const [docVersion, setDocVersion] = createSignal(0);
-  // Milkdown 就绪后暴露的插入 API（供 ShokaX 工具栏在光标处插骨架）
-  const [editorApi, setEditorApi] = createSignal<{
-    insertText: (text: string) => void;
-  } | null>(null);
-  const insertText = (text: string): void => {
-    editorApi()?.insertText(text);
+
+  // 视图模式：分栏 / 仅源码 / 仅预览
+  const [mode, setMode] = createSignal<Mode>("split");
+  // 预览用 satteri 渲染（与博客同管线）
+  const isMdxFile = (): boolean => /\.mdx$/i.test(path());
+  const [previewSrc, setPreviewSrc] = createSignal("");
+  const [previewNode] = createResource(previewSrc, (md) => renderPreview(md, isMdxFile()));
+
+  const isPreviewBusy = (): boolean => previewNode.loading;
+
+  let taEl: HTMLTextAreaElement | null = null;
+  let debounceId: ReturnType<typeof setTimeout> | undefined;
+
+  /** 输入防抖后刷新预览（300ms） */
+  const handleSourceInput = (value: string): void => {
+    setBody(value);
+    if (debounceId !== undefined) clearTimeout(debounceId);
+    debounceId = setTimeout(() => setPreviewSrc(value), 300);
+  };
+
+  /** 工具栏 / 加载 / AI 摘要等外部变更立即刷新预览 */
+  const setSourceImmediate = (value: string): void => {
+    setPreviewSrc(value);
+  };
+
+  /** 在光标处插入 ShokaX 骨架文本 */
+  const insertSnippet = (text: string): void => {
+    const cur = body();
+    const start = taEl?.selectionStart ?? cur.length;
+    const end = taEl?.selectionEnd ?? start;
+    const next = cur.slice(0, start) + text + cur.slice(end);
+    setBody(next);
+    setSourceImmediate(next);
+    const pos = start + text.length;
+    requestAnimationFrame(() => {
+      taEl?.focus();
+      taEl?.setSelectionRange(pos, pos);
+    });
   };
 
   const fullPath = (): string | null => {
@@ -59,6 +108,7 @@ export function Editor(): import("solid-js").JSX.Element {
       const parsed = parseFrontmatter(content);
       setFrontData(parsed.data);
       setBody(parsed.content);
+      setSourceImmediate(parsed.content);
       setTitle(typeof parsed.data.title === "string" ? parsed.data.title : "");
       setSlug(typeof parsed.data.slug === "string" ? parsed.data.slug : "");
       const cats = parsed.data.categories;
@@ -73,7 +123,6 @@ export function Editor(): import("solid-js").JSX.Element {
       else setTags("");
       setDraft(parsed.data.draft === true);
       setDate(typeof parsed.data.date === "string" ? parsed.data.date : "");
-      setDocVersion((v) => v + 1);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     }
@@ -91,7 +140,7 @@ export function Editor(): import("solid-js").JSX.Element {
   });
 
   createEffect(() => {
-    // 当 path 变化重新加载
+    // 当 path 变化重新加载（含首次）
     void path();
     void load();
   });
@@ -166,6 +215,8 @@ export function Editor(): import("solid-js").JSX.Element {
       const reparsed = parseFrontmatter(updated);
       setFrontData(reparsed.data);
       setBody(reparsed.content);
+      // 摘要落地后同步源码与预览（修复"处理后不自动重渲染"）
+      setSourceImmediate(reparsed.content);
       setMsg(t("editor.aiDone"));
       await projectStore.refreshPosts();
     } catch (e: unknown) {
@@ -185,7 +236,7 @@ export function Editor(): import("solid-js").JSX.Element {
         <a href="#/workspace" class="text-sm text-muted hover:text-[var(--text)]">
           ← {t("workspace.title")}
         </a>
-        <span class="text-sm font-mono text-xs bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded">
+        <span class="text-sm font-mono text-xs bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded text-mono">
           {path() || "—"}
         </span>
         <div class="ml-auto flex gap-2">
@@ -276,17 +327,53 @@ export function Editor(): import("solid-js").JSX.Element {
           </div>
 
           <div class="flex flex-col gap-2">
-            <ShokaxToolbar insertText={insertText} />
-            {/* 用 docVersion 作 key：切换文章时 remount，避免编辑器显示旧内容 */}
-            <For each={[docVersion()]}>
-              {() => (
-                <MilkdownEditor
-                  initialMarkdown={body()}
-                  onChange={(md) => setBody(md)}
-                  onReady={(api) => setEditorApi(api)}
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="flex items-center gap-1 rounded border border-[var(--border)] p-0.5 bg-[var(--surface)]">
+                {(Object.keys(MODE_LABELS) as Mode[]).map((m) => (
+                  <button
+                    type="button"
+                    onClick={() => setMode(m)}
+                    class={`px-2.5 py-1 text-xs rounded ${
+                      mode() === m
+                        ? "bg-[var(--accent)] text-white"
+                        : "text-[var(--muted)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {MODE_LABELS[m]}
+                  </button>
+                ))}
+              </div>
+              <ShokaxToolbar insertText={insertSnippet} />
+              {isPreviewBusy() ? (
+                <span class="text-xs text-muted">{t("common.loading")}</span>
+              ) : null}
+            </div>
+
+            <div
+              class={
+                mode() === "split"
+                  ? "grid grid-cols-1 xl:grid-cols-2 gap-2"
+                  : "flex flex-col gap-2"
+              }
+            >
+              {(mode() === "split" || mode() === "source") && (
+                <textarea
+                  ref={(el) => {
+                    taEl = el;
+                  }}
+                  value={body()}
+                  onInput={(e) => handleSourceInput(e.currentTarget.value)}
+                  class="w-full min-h-[55vh] p-3 rounded border border-[var(--border)] bg-[var(--bg)] text-mono text-sm leading-relaxed resize-y focus:outline-none focus:border-[var(--accent)]"
+                  spellcheck={false}
+                  placeholder="Markdown / MDX 源码…"
                 />
               )}
-            </For>
+              {(mode() === "split" || mode() === "preview") && (
+                <div class="surface p-4 rounded min-h-[55vh]">
+                  <PreviewMount node={previewNode()} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Show>
