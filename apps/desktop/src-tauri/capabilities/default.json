@@ -35,7 +35,7 @@
     },
     {
       "identifier": "shell:allow-execute",
-      "allow": [{ "name": "git", "args": true }]
+      "allow": [{ "name": "git", "cmd": "git", "args": true }]
     }
   ]
 }
