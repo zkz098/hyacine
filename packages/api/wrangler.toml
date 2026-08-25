@@ -32,3 +32,7 @@ binding = "CACHE"
 
 [ai]
 binding = "AI"
+
+# P1: AI 产物自动队列的定期消费（普通任务每 15 分钟；00:40 UTC 处理 3036 推迟到次日的任务）
+[triggers]
+crons = ["*/15 * * * *", "0 1 * * *"]

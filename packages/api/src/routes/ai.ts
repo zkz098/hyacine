@@ -10,6 +10,7 @@ import { cosine, meanPool, stripFrontmatter } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
 import { defer } from "../utils/defer";
 import { loadEffectiveConfig } from "../utils/config";
+import { generateSummaryByok, generateSummaryWorkersAi } from "../utils/aiQueue";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
@@ -53,61 +54,21 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       }
     }
 
-    if (endpoint === undefined || endpoint.length === 0 || key === undefined || key.length === 0) {
-      return c.json(errorBody("ai_not_configured", "未配置 AI 摘要端点"), 503);
-    }
-
     const stripped = stripFrontmatter(content);
 
-    // Call OpenAI compatible
+    // Provider 分流：byok=OpenAI 兼容端点；workers-ai=Workers AI（与自动队列共享生成函数）
     let summaryText: string;
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model: usedModel,
-          messages: [
-            {
-              role: "system",
-              content: "你是博客摘要助手，请用中文为以下文章生成一句简洁摘要（不超过 200 字）。",
-            },
-            { role: "user", content: stripped.slice(0, 8000) },
-          ],
-          max_tokens: 200,
-          temperature: 0.7,
-        }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        return c.json(
-          errorBody("ai_failed", `AI 调用失败: ${response.status} ${text.slice(0, 500)}`),
-          502,
-        );
-      }
-
-      const json = (await response.json()) as {
-        choices?: { message?: { content?: string | { text?: string }[] } }[];
-        error?: { message?: string };
-      };
-      if (json.error !== undefined) {
-        return c.json(errorBody("ai_failed", json.error.message ?? "AI 返回错误"), 502);
-      }
-      const choice = json.choices?.[0]?.message?.content;
-      if (typeof choice === "string") {
-        summaryText = choice.trim().replace(/\s+/g, " ");
-      } else if (Array.isArray(choice)) {
-        const textPart = choice.find((item) => typeof item.text === "string");
-        summaryText = (textPart?.text ?? "").trim().replace(/\s+/g, " ");
+      if (cfg.aiSummary.provider === "workers-ai") {
+        if (c.env.AI === undefined) {
+          return c.json(errorBody("ai_not_configured", "Workers AI 未绑定"), 503);
+        }
+        summaryText = await generateSummaryWorkersAi(c.env, usedModel, stripped);
       } else {
-        summaryText = "";
-      }
-      if (summaryText.length === 0) {
-        return c.json(errorBody("ai_failed", "AI 返回空摘要"), 502);
+        if (endpoint.length === 0 || key.length === 0) {
+          return c.json(errorBody("ai_not_configured", "未配置 AI 摘要端点"), 503);
+        }
+        summaryText = await generateSummaryByok(endpoint, key, usedModel, stripped);
       }
     } catch (error) {
       return c.json(errorBody("ai_failed", `AI 调用异常: ${String(error)}`), 502);

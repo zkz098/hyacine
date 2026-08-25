@@ -13,8 +13,11 @@ function toEffective(cfg: ReturnType<typeof effectiveConfig>): EffectiveConfig {
       endpoint: cfg.aiSummary.endpoint,
       key: { set: cfg.aiSummary.key.length > 0 },
       model: cfg.aiSummary.model,
+      provider: cfg.aiSummary.provider,
+      autogen: cfg.aiSummary.autogen,
     },
     embedModel: cfg.embedModel,
+    embedAutogen: cfg.embedAutogen,
     r2: {
       endpoint: cfg.r2.endpoint,
       accessKeyId: cfg.r2.accessKeyId,
@@ -46,8 +49,17 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       pairs.push(["aiSummary.endpoint", aiSummary.endpoint]);
       pairs.push(["aiSummary.key", aiSummary.key]);
       pairs.push(["aiSummary.model", aiSummary.model]);
+      pairs.push(["aiSummary.provider", aiSummary.provider]);
+      pairs.push([
+        "aiSummary.autogen",
+        aiSummary.autogen === undefined ? undefined : String(aiSummary.autogen),
+      ]);
     }
     pairs.push(["embedModel", update.embedModel]);
+    pairs.push([
+      "embedAutogen",
+      update.embedAutogen === undefined ? undefined : String(update.embedAutogen),
+    ]);
     const r2 = update.r2;
     if (r2 !== undefined) {
       pairs.push(["r2.endpoint", r2.endpoint]);

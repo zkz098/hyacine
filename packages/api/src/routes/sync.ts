@@ -3,6 +3,10 @@ import { Hono } from "hono";
 import { SyncUploadRequestSchema } from "@hyacine/contract";
 import { errorBody } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
+import { defer } from "../utils/defer";
+import { loadEffectiveConfig } from "../utils/config";
+import { enqueueAiNeeds, processAiQueue } from "../utils/aiQueue";
+import type { AiKind } from "../utils/aiQueue";
 import type { Env, Variables } from "../types";
 
 export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
@@ -28,12 +32,15 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     const changedHashes: string[] = [];
     const unchangedHashes: string[] = [];
     const inputPaths = new Set<string>();
+    // P1: 追踪本次上行带正文的 hash（自动 AI 需要正文）
+    const contentByHash = new Map<string, string>();
 
     for (const post of input.posts) {
       inputPaths.add(post.path);
       const existingHash = existingMap.get(post.path);
       if (existingHash === undefined || existingHash !== post.hash) {
         changedHashes.push(post.hash);
+        const content = post.content ?? null;
         await c.env.DB.prepare(
           "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content",
         )
@@ -47,9 +54,10 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
             post.createdAt,
             post.updatedAt,
             post.lastModified,
-            post.content ?? null,
+            content,
           )
           .run();
+        if (post.content !== undefined) contentByHash.set(post.hash, post.content);
       } else {
         unchangedHashes.push(post.hash);
       }
@@ -128,6 +136,31 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
         const path = hashToPath.get(hash) ?? "";
         needs.push({ hash, path, reason: "embed" });
       }
+    }
+
+    // P1 自动 AI 产物：按 autogen 开关对新变更且本次带正文的 hash 入队，内联小额消费
+    const cfg = await loadEffectiveConfig(c.env);
+    const toEnqueue: { hash: string; path: string; reason: AiKind }[] = [];
+    for (const need of needs) {
+      if (!contentByHash.has(need.hash)) continue;
+      const kinds: AiKind[] = [];
+      if (cfg.aiSummary.autogen && (need.reason === "summary" || need.reason === "both")) {
+        kinds.push("summary");
+      }
+      if (cfg.embedAutogen && (need.reason === "embed" || need.reason === "both")) {
+        kinds.push("embed");
+      }
+      if (kinds.length > 0) {
+        toEnqueue.push({
+          hash: need.hash,
+          path: need.path,
+          reason: kinds.length === 2 ? ("both" as const) : kinds[0]!,
+        });
+      }
+    }
+    if (toEnqueue.length > 0) {
+      await enqueueAiNeeds(c.env, toEnqueue);
+      defer(c, processAiQueue(c.env, 3));
     }
 
     return c.json({

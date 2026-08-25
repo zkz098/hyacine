@@ -12,7 +12,10 @@ interface CloudForm {
   aiEndpoint: string;
   aiModel: string;
   aiKey: string;
+  aiProvider: "byok" | "workers-ai";
+  aiAutogen: boolean;
   embedModel: string;
+  embedAutogen: boolean;
   r2Endpoint: string;
   r2AccessKeyId: string;
   r2Secret: string;
@@ -24,7 +27,10 @@ function emptyForm(): CloudForm {
     aiEndpoint: "",
     aiModel: "",
     aiKey: "",
+    aiProvider: "byok",
+    aiAutogen: false,
     embedModel: "",
+    embedAutogen: false,
     r2Endpoint: "",
     r2AccessKeyId: "",
     r2Secret: "",
@@ -64,7 +70,10 @@ export function Settings(): import("solid-js").JSX.Element {
         aiEndpoint: cfg.aiSummary.endpoint,
         aiModel: cfg.aiSummary.model,
         aiKey: "",
+        aiProvider: cfg.aiSummary.provider,
+        aiAutogen: cfg.aiSummary.autogen,
         embedModel: cfg.embedModel,
+        embedAutogen: cfg.embedAutogen,
         r2Endpoint: cfg.r2.endpoint,
         r2AccessKeyId: cfg.r2.accessKeyId,
         r2Secret: "",
@@ -89,8 +98,11 @@ export function Settings(): import("solid-js").JSX.Element {
       if (f.aiEndpoint !== prev.aiSummary.endpoint) aiPatch.endpoint = f.aiEndpoint;
       if (f.aiModel !== prev.aiSummary.model) aiPatch.model = f.aiModel;
       if (f.aiKey.length > 0) aiPatch.key = f.aiKey;
+      if (f.aiProvider !== prev.aiSummary.provider) aiPatch.provider = f.aiProvider;
+      if (f.aiAutogen !== prev.aiSummary.autogen) aiPatch.autogen = f.aiAutogen;
       if (Object.keys(aiPatch).length > 0) update.aiSummary = aiPatch;
       if (f.embedModel !== prev.embedModel) update.embedModel = f.embedModel;
+      if (f.embedAutogen !== prev.embedAutogen) update.embedAutogen = f.embedAutogen;
       const r2Patch: NonNullable<ConfigUpdateRequest["r2"]> = {};
       if (f.r2Endpoint !== prev.r2.endpoint) r2Patch.endpoint = f.r2Endpoint;
       if (f.r2AccessKeyId !== prev.r2.accessKeyId) r2Patch.accessKeyId = f.r2AccessKeyId;
@@ -108,7 +120,7 @@ export function Settings(): import("solid-js").JSX.Element {
     }
   };
 
-  const setField = (key: keyof CloudForm, value: string): void => {
+  const setField = (key: keyof CloudForm, value: string | boolean): void => {
     setCloudForm((f) => ({ ...f, [key]: value }));
   };
 
@@ -285,6 +297,30 @@ export function Settings(): import("solid-js").JSX.Element {
                     class="flex-1 px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
                   />
                 </div>
+                <div class="flex items-center gap-3 text-sm">
+                  <label class="flex items-center gap-1">
+                    <span class="text-muted">{t("settings.cloud.ai.provider")}</span>
+                    <select
+                      value={cloudForm().aiProvider}
+                      onChange={(e) => {
+                        const v = e.currentTarget.value;
+                        setField("aiProvider", v === "workers-ai" ? "workers-ai" : "byok");
+                      }}
+                      class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+                    >
+                      <option value="byok">OpenAI 兼容 (BYOK)</option>
+                      <option value="workers-ai">Workers AI</option>
+                    </select>
+                  </label>
+                  <label class="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={cloudForm().aiAutogen}
+                      onChange={(e) => setField("aiAutogen", e.currentTarget.checked)}
+                    />
+                    {t("settings.cloud.ai.autogen")}
+                  </label>
+                </div>
               </div>
 
               <div class="flex flex-col gap-2">
@@ -295,6 +331,14 @@ export function Settings(): import("solid-js").JSX.Element {
                   placeholder={t("settings.cloud.embedModel")}
                   class="px-3 py-2 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
                 />
+                <label class="flex items-center gap-1 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cloudForm().embedAutogen}
+                    onChange={(e) => setField("embedAutogen", e.currentTarget.checked)}
+                  />
+                  {t("settings.cloud.embedAutogen")}
+                </label>
               </div>
 
               <div class="flex flex-col gap-2">

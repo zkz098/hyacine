@@ -426,6 +426,51 @@ describe("sync", () => {
     expect(again.status).toBe(200);
     expect(db.posts.get("content.md")?.content).toBe(body);
   });
+
+  it("autogen 开启时同步自动入队（P1）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    await request(
+      env,
+      "PUT",
+      "/api/admin/config",
+      { aiSummary: { autogen: true }, embedAutogen: true },
+      token,
+    );
+    const now = new Date().toISOString();
+    const hash = "c".repeat(16);
+    const response = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "auto.md",
+            slug: "auto",
+            title: "Auto",
+            draft: false,
+            categories: [],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            content: `---\ntitle: Auto\n---\n\nBody for auto AI.`,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(response.status).toBe(200);
+    const db = getFakeD1(env);
+    const queueRow = db.aiQueue.get(hash);
+    expect(queueRow?.kind).toBe("both");
+    // 状态可能因 defer 内联消费处于 pending/processing 竞态，只断言已入队且 kind 合并正确
+    expect(queueRow?.path).toBe("auto.md");
+  });
 });
 
 describe("ai", () => {
@@ -974,5 +1019,36 @@ describe("admin config (dynamic)", () => {
       ai: { summary: boolean };
     };
     expect(after.ai.summary).toBe(true);
+  });
+
+  it("provider/autogen 配置往返（P1 自动 AI 开关）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const put = await request(
+      env,
+      "PUT",
+      "/api/admin/config",
+      {
+        aiSummary: { provider: "workers-ai", autogen: true },
+        embedAutogen: true,
+      },
+      token,
+    );
+    expect(put.status).toBe(200);
+    const after = (await put.json()) as {
+      aiSummary: { provider: string; autogen: boolean };
+      embedAutogen: boolean;
+    };
+    expect(after.aiSummary.provider).toBe("workers-ai");
+    expect(after.aiSummary.autogen).toBe(true);
+    expect(after.embedAutogen).toBe(true);
+    const get = (await (
+      await request(env, "GET", "/api/admin/config", undefined, token)
+    ).json()) as {
+      aiSummary: { provider: string; autogen: boolean };
+      embedAutogen: boolean;
+    };
+    expect(get.aiSummary.provider).toBe("workers-ai");
+    expect(get.embedAutogen).toBe(true);
   });
 });

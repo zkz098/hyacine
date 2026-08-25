@@ -19,7 +19,6 @@ export const AiSummaryConfigSchema = z.object({
   key: z.string().min(1).max(4096).optional(),
   model: z.string().min(1).max(128).optional(),
 });
-
 export const R2ConfigSchema = z.object({
   endpoint: z.string().min(1).max(1024).optional(),
   accessKeyId: z.string().min(1).max(128).optional(),
@@ -27,14 +26,24 @@ export const R2ConfigSchema = z.object({
   bucket: z.string().min(1).max(128).optional(),
 });
 
+/** 摘要提供方：byok=OpenAI 兼容端点（现状）；workers-ai=Workers AI（model 填 @cf/... 模型 id） */
+export const AiSummaryProviderSchema = z.enum(["byok", "workers-ai"]);
+
+export type AiSummaryProvider = z.infer<typeof AiSummaryProviderSchema>;
+
 /** 云端配置的「内部形状」：env 默认 + D1 覆盖后的有效值；空串=未配置 */
 export const CloudConfigSchema = z.object({
   aiSummary: z.object({
     endpoint: z.string(),
     key: z.string(),
     model: z.string(),
+    provider: AiSummaryProviderSchema.default("byok"),
+    /** 新/变更文章上行后是否自动生成摘要 */
+    autogen: z.boolean().default(false),
   }),
   embedModel: z.string(),
+  /** 新/变更文章上行后是否自动生成嵌入 */
+  embedAutogen: z.boolean().default(false),
   r2: z.object({
     endpoint: z.string(),
     accessKeyId: z.string(),
@@ -51,8 +60,11 @@ export const EffectiveConfigSchema = z.object({
     endpoint: z.string(),
     key: SecretInfoSchema,
     model: z.string(),
+    provider: AiSummaryProviderSchema,
+    autogen: z.boolean(),
   }),
   embedModel: z.string(),
+  embedAutogen: z.boolean(),
   r2: z.object({
     endpoint: z.string(),
     accessKeyId: z.string(),
@@ -71,10 +83,13 @@ export const ConfigUpdateRequestSchema = z
         endpoint: z.string().max(1024).optional(),
         key: z.string().max(4096).optional(),
         model: z.string().max(128).optional(),
+        provider: AiSummaryProviderSchema.optional(),
+        autogen: z.boolean().optional(),
       })
       .strict()
       .optional(),
     embedModel: z.string().max(128).optional(),
+    embedAutogen: z.boolean().optional(),
     r2: z
       .object({
         endpoint: z.string().max(1024).optional(),
@@ -94,6 +109,9 @@ export const APP_CONFIG_KEYS = [
   "aiSummary.endpoint",
   "aiSummary.key",
   "aiSummary.model",
+  "aiSummary.provider",
+  "aiSummary.autogen",
+  "embedAutogen",
   "embedModel",
   "r2.endpoint",
   "r2.accessKeyId",

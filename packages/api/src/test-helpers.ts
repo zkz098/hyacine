@@ -55,6 +55,18 @@ interface SyncLogRow {
   deleted: number;
 }
 
+interface AiQueueRow {
+  hash: string;
+  path: string;
+  kind: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  next_run_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 class FakePreparedStatement {
   sql: string;
   db: FakeD1Database;
@@ -94,6 +106,7 @@ export class FakeD1Database {
   assets = new Map<string, AssetRow>();
   tokens = new Map<string, TokenRow>();
   appConfig = new Map<string, string>();
+  aiQueue = new Map<string, AiQueueRow>();
   syncLogs: SyncLogRow[] = [];
   nextSyncLogId = 1;
 
@@ -295,6 +308,76 @@ export class FakeD1Database {
       });
       return;
     }
+
+    if (lower.startsWith("insert into ai_queue")) {
+      // 我们控制的 SQL：VALUES (?, ?, ?, 'pending', 0, ?, ?, ?) → 参数即 [hash, path, kind, nextRunAt, createdAt, updatedAt]
+      const [hash, path, kind, nextRunAt, createdAt, updatedAt] = params as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ];
+      const existing = this.aiQueue.get(hash);
+      if (existing !== undefined) {
+        existing.path = path;
+        existing.kind =
+          existing.kind === "both" || kind === "both"
+            ? "both"
+            : existing.kind !== kind
+              ? "both"
+              : existing.kind;
+        existing.status = "pending";
+        existing.next_run_at = nextRunAt;
+        existing.updated_at = updatedAt;
+      } else {
+        this.aiQueue.set(hash, {
+          hash,
+          path,
+          kind,
+          status: "pending",
+          attempts: 0,
+          last_error: null,
+          next_run_at: nextRunAt,
+          created_at: createdAt,
+          updated_at: updatedAt,
+        });
+      }
+      return;
+    }
+
+    if (lower.startsWith("delete from ai_queue")) {
+      const [hash] = params as [string];
+      this.aiQueue.delete(hash);
+      return;
+    }
+
+    if (lower.startsWith("update ai_queue")) {
+      const statusMatch = sql.match(/status='([^']+)'/i);
+      const status = statusMatch?.[1] ?? "";
+      const setPart = sql.match(/set\s+(.*?)\s+where/i)?.[1] ?? "";
+      const paramCols: string[] = [];
+      for (const pair of setPart.split(",")) {
+        const eq = pair.indexOf("=");
+        const col = pair.slice(0, eq).trim().toLowerCase();
+        if (pair.slice(eq + 1).trim() === "?") paramCols.push(col);
+      }
+      const setParams = params.slice(0, paramCols.length) as unknown[];
+      const [hash] = params.slice(paramCols.length) as [string];
+      const row = this.aiQueue.get(hash);
+      if (row !== undefined) {
+        row.status = status; // 字面量 set 子句（status='...'）不在参数列，需显式赋值
+        paramCols.forEach((col, index) => {
+          const value = setParams[index];
+          if (col === "attempts") row.attempts = value as number;
+          else if (col === "last_error") row.last_error = (value as string | null) ?? null;
+          else if (col === "next_run_at") row.next_run_at = value as string;
+          else if (col === "updated_at") row.updated_at = value as string;
+        });
+      }
+      return;
+    }
   }
 
   executeAll<T>(sql: string, params: unknown[]): T[] {
@@ -357,6 +440,23 @@ export class FakeD1Database {
       // Sorting already insertion order by at; mimic sort
       const syncRows = [...this.syncLogs].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 50);
       return syncRows as unknown as T[];
+    }
+
+    if (lower.includes("from ai_queue")) {
+      let rows = [...this.aiQueue.values()];
+      const hasWhere = lower.includes("status in");
+      let budget = 100000;
+      if (lower.includes("limit")) {
+        budget = Number(hasWhere ? params[1] : params[0]);
+      }
+      if (hasWhere) {
+        const [nowIso] = params as [string];
+        rows = rows.filter(
+          (r) => (r.status === "pending" || r.status === "waiting") && r.next_run_at <= nowIso,
+        );
+      }
+      rows.sort((a, b) => a.next_run_at.localeCompare(b.next_run_at));
+      return rows.slice(0, budget) as unknown as T[];
     }
 
     return [];

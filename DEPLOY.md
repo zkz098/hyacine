@@ -210,6 +210,21 @@ curl -X POST https://<worker>/api/auth/setup \
 - ⚠️ 换模型 = 旧向量作废（`ai_results` 按 `embed_model` 区分）；`ai/similar` 全表扫有向量行，不建议混模型
 - 验证：health `ai.embed:true`；`hyc ai:embed` 生成（`hyc sync` 返回的 `ai.needs` 会提示缺哪些 hash 的 summary/embed）
 
+### 3.9 自动 AI 产物（队列，P1）
+
+开启「自动生成摘要/嵌入」后，**新/变更文章上行到 API 后自动入队生成**，无需手动 CLI：
+
+- 开启：管理台 → 设置 → 云端配置：`AI 摘要 → 自动生成摘要`、`嵌入 → 自动生成嵌入`（对应 `aiSummary.autogen` / `embedAutogen`，改动即时生效）
+- 前提：同步需携带正文（cli/桌面 `sync` 已默认带，P0 落 `posts.content`）；未带正文的文章不会自动入队
+- 消费：sync 后 waitUntil 内联小额 + Cron（`*/15 * * * *` + `0 1 * * *`）
+- **Workers AI 每日免费 10,000 neurons，00:00 UTC 重置**；错误分流：
+  - `3036`（额度耗尽）→ 队列 `waiting`，**次日 00:40 UTC 再试**（当天不再碰）
+  - `3040`（瞬时无容量）→ 5 分钟短退避重试
+  - 其余错误重试 5 次后置 `failed`（可在管理台/DB 查看 `ai_queue` 行）
+- 摘要提供方可选：`byok`（OpenAI 兼容端点，默认）或 `workers-ai`（`aiSummary.provider`，model 填 `@cf/...`，默认 `@cf/meta/llama-3.2-3b-instruct`）
+
+> 队列表 `ai_queue` 由 migration 0004 创建，`pnpm --filter @hyacine/api deploy` 一条龙自动应用；`[triggers] crons` 已写入 wrangler.toml。
+
 ### 3.8 动态配置（管理台可视化管理，免 redeploy）
 
 部署后除了 env/secret，还可以在**管理台 → 设置（登录后）**直接改 AI/R2 配置，即时生效：

@@ -57,6 +57,11 @@ export async function loadConfigOverrides(env: Env): Promise<Record<string, stri
   return map;
 }
 
+function parseBool(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  return value === "true";
+}
+
 /** 合并 env 默认值与 D1 覆盖，产出「有效配置」（空串=未配置） */
 export function effectiveConfig(env: Env, overrides: Record<string, string>): CloudConfig {
   return {
@@ -64,8 +69,15 @@ export function effectiveConfig(env: Env, overrides: Record<string, string>): Cl
       endpoint: overrides["aiSummary.endpoint"] ?? env.AI_SUMMARY_ENDPOINT ?? "",
       key: overrides["aiSummary.key"] ?? env.AI_SUMMARY_KEY ?? "",
       model: overrides["aiSummary.model"] ?? env.AI_SUMMARY_MODEL ?? "",
+      provider:
+        overrides["aiSummary.provider"] === "workers-ai" ||
+        (overrides["aiSummary.provider"] === undefined && env.AI_SUMMARY_PROVIDER === "workers-ai")
+          ? ("workers-ai" as const)
+          : ("byok" as const),
+      autogen: parseBool(overrides["aiSummary.autogen"], false),
     },
     embedModel: overrides["embedModel"] ?? env.EMBED_MODEL ?? "",
+    embedAutogen: parseBool(overrides["embedAutogen"], false),
     r2: {
       endpoint: overrides["r2.endpoint"] ?? env.R2_S3_ENDPOINT ?? "",
       accessKeyId: overrides["r2.accessKeyId"] ?? env.R2_ACCESS_KEY_ID ?? "",
