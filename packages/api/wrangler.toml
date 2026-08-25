@@ -2,10 +2,15 @@ name = "hyacine-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-24"
 
-# 本地（wrangler dev --local）用占位 id；remote 部署前替换为真实 id，或直接用新方式：
-#   方案 A（自动预置，wrangler>=4.45）：删掉下面两处 id/bucket 名，只留 binding 名，
-#     wrangler deploy 会自动创建并回写 id；
-#   方案 B（Dashboard）：Workers & Pages -> hyacine-api -> Bindings 页可视化添加绑定。
+# 绑定的 id 字段默认【不写】(wrangler>=4.45 自动预置)，避免 local 占位在 deploy 时覆盖真实资源：
+#   - 本地 `wrangler dev --local` 用 miniflare 模拟，不需要 id；
+#   - 远程 `wrangler deploy` 会以本文件为【权威】，覆盖 Worker 上同名的 Dashboard 绑定，
+#     因此永远不要在 bindings 页手加 D1/KV 的同时又用 wrangler deploy（会把绑定覆盖成无效值）。
+#   三种“选其一”的方式：
+#   方案 A（推荐）：不写 database_id / id，deploy 自动创建/关联同名资源并回写 id；
+#   方案 C（CLI 手动）：wrangler d1 create / kv namespace create 后把真实 id 填到下方字段；
+#   方案 B（Dashboard）：只在 Bindings 页配绑定，此时**不要**再用 `wrangler deploy`
+#     （改用 dashboard 的 Edit code / git 集成），否则 toml 会覆盖 dashboard 绑定。
 # 必须的 Secrets（CLI 或 Dashboard 均可）：
 #   SETUP_CODE / AI_SUMMARY_ENDPOINT / AI_SUMMARY_KEY / AI_SUMMARY_MODEL / EMBED_MODEL
 # 可选 Secrets（资产直传 R2 时才需要）：
@@ -13,11 +18,11 @@ compatibility_date = "2026-08-24"
 [[d1_databases]]
 binding = "DB"
 database_name = "hyacine"
-database_id = "local"
+# database_id = "<真实 id，方案 C 时填写>"
 
 [[kv_namespaces]]
 binding = "CACHE"
-id = "local"
+# id = "<真实 id，方案 C 时填写>"
 
 # R2 上传为可选能力：不部署此绑定，/api/assets/presign 将返回 503(r2_not_configured)，
 # 其余接口不受影响。需要资产直传 R2 时再取消注释并保留 bucket。
