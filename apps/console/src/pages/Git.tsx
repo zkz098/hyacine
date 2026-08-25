@@ -11,17 +11,22 @@ function parsePorcelain(output: string): Array<{ status: string; path: string }>
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
     .map((line) => {
-      const status = line.slice(0, 2).trim() || "?";
-      const path = line.slice(3).trim();
-      const label =
-        status === "??"
-          ? "新增"
-          : status.includes("M")
-            ? "修改"
-            : status.includes("D")
-              ? "删除"
-              : status;
-      return { status: label, path };
+      const xy = line.slice(0, 2);
+      const staged = xy[0] ?? " ";
+      const unstaged = xy[1] ?? " ";
+      let path = line.slice(3).trim();
+      // 重命名条目形如 "R  old -> new"，取目标路径
+      if ((staged === "R" || unstaged === "R") && path.includes(" -> ")) {
+        path = path.split(" -> ").pop()?.trim() ?? path;
+      }
+      let status: string;
+      if (xy === "??") status = "新增";
+      else if (staged === "D" || unstaged === "D") status = "删除";
+      else if (staged === "A") status = "新增";
+      else if (staged === "R" || unstaged === "R") status = "重命名";
+      else if (staged === "M" || unstaged === "M") status = "修改";
+      else status = xy.trim() || "变更";
+      return { status, path };
     });
 }
 

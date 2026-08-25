@@ -1,4 +1,5 @@
 import { createSignal, Show, onMount } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
@@ -7,6 +8,7 @@ import { isTauri, gitVersion } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 
 export function Settings(): import("solid-js").JSX.Element {
+  const navigate = useNavigate();
   const [url, setUrl] = createSignal(apiStore.state.baseUrl);
   const [saved, setSaved] = createSignal(false);
   const [health, setHealth] = createSignal<{
@@ -37,18 +39,19 @@ export function Settings(): import("solid-js").JSX.Element {
     setHealthLoading(true);
     setHealthError(null);
     setHealth(null);
+    const prevUrl = apiStore.state.baseUrl;
     try {
-      // temporarily use current input url for test
+      // 暂时用当前输入框的 url 做连通性测试，不提交持久化
       const testUrl = url().trim();
-      const prevUrl = apiStore.state.baseUrl;
       if (testUrl !== prevUrl) apiStore.setBaseUrl(testUrl);
       const client = apiStore.getClient();
       const res = await client.health();
       setHealth(res);
-      if (testUrl !== prevUrl) apiStore.setBaseUrl(prevUrl);
     } catch (err: unknown) {
       setHealthError(messageOf(err));
     } finally {
+      // 测试非破坏性：无论成败都恢复原 baseUrl，避免失败残留死 URL 且被持久化
+      if (apiStore.state.baseUrl !== prevUrl) apiStore.setBaseUrl(prevUrl);
       setHealthLoading(false);
     }
   };
@@ -58,10 +61,10 @@ export function Settings(): import("solid-js").JSX.Element {
     apiStore.setTheme(next);
   };
 
-  // oxlint-disable-next-line unicorn/consistent-function-scoping -- uses apiStore, keep inside
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- uses apiStore/navigate, keep inside
   const handleLogout = (): void => {
     apiStore.clearAuth();
-    location.hash = "#/login";
+    navigate("/login");
   };
 
   return (

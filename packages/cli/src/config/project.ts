@@ -18,19 +18,19 @@ const DEFAULT_CONFIG: ProjectConfig = {
 
 export function findProjectRoot(startDir: string = process.cwd()): string | null {
   let dir = resolve(startDir);
-  const root = dirname(dir) === dir ? dir : "";
-  while (true) {
+  let packageFallback: string | null = null;
+  for (;;) {
     if (existsSync(join(dir, "hyacine.yml")) || existsSync(join(dir, "hyacine.yaml"))) {
       return dir;
     }
-    if (existsSync(join(dir, "package.json"))) {
-      // Treat package.json dir as project root fallback
-      return dir;
+    // 只把最近的 package.json 当兜底，不在这里提前返回（否则子目录自带
+    // package.json 时会误判项目根，漏掉更上层真正的 hyacine.yml）。
+    if (packageFallback === null && existsSync(join(dir, "package.json"))) {
+      packageFallback = dir;
     }
     const parent = dirname(dir);
-    if (parent === dir) return null;
+    if (parent === dir) return packageFallback;
     dir = parent;
-    if (root && dir === root) return null;
   }
 }
 

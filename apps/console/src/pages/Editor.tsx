@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { t } from "../i18n";
 import { isTauri, readTextFile, writeTextFile } from "../tauri/bridge";
@@ -30,6 +30,9 @@ export function Editor(): import("solid-js").JSX.Element {
   const [tags, setTags] = createSignal("");
   const [draft, setDraft] = createSignal(false);
   const [date, setDate] = createSignal("");
+  // 每次成功加载一篇文章后 +1，用它在 <For> 里按版本 remount Milkdown 编辑器，
+  // 这样同一路由下切换 ?path=A -> ?path=B 时编辑器内容也跟着换（默认只在挂载时设置）。
+  const [docVersion, setDocVersion] = createSignal(0);
 
   const fullPath = (): string | null => {
     const dir = projectStore.projectDir();
@@ -62,13 +65,13 @@ export function Editor(): import("solid-js").JSX.Element {
       else setTags("");
       setDraft(parsed.data.draft === true);
       setDate(typeof parsed.data.date === "string" ? parsed.data.date : "");
+      setDocVersion((v) => v + 1);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     }
   };
 
   onMount(() => {
-    void load();
     const handler = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
@@ -265,7 +268,12 @@ export function Editor(): import("solid-js").JSX.Element {
           </div>
 
           <div class="flex flex-col gap-2">
-            <MilkdownEditor initialMarkdown={body()} onChange={(md) => setBody(md)} />
+            {/* 用 docVersion 作 key：切换文章时 remount，避免编辑器显示旧内容 */}
+            <For each={[docVersion()]}>
+              {() => (
+                <MilkdownEditor initialMarkdown={body()} onChange={(md) => setBody(md)} />
+              )}
+            </For>
           </div>
         </div>
       </Show>

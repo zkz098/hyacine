@@ -37,7 +37,13 @@ export async function readDirRecursive(dir: string): Promise<string[]> {
   const { readDir } = await import("@tauri-apps/plugin-fs");
   const out: string[] = [];
   async function walk(current: string): Promise<void> {
-    const entries = await readDir(current);
+    let entries: Awaited<ReturnType<typeof readDir>>;
+    try {
+      entries = await readDir(current);
+    } catch {
+      // 某个子目录不可读（权限/联结点死循环/损坏）时跳过它，不要让整棵树失败
+      return;
+    }
     for (const e of entries) {
       const full = `${current}/${e.name}`;
       if (e.isDirectory) {

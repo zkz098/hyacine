@@ -7,6 +7,7 @@ import { postBodyHash } from "../lib/postHash";
 export interface ProjectConfig {
   contentDir: string;
   assetsDir: string;
+  postExtension: string[];
 }
 
 export interface LocalPostInfo {
@@ -28,7 +29,7 @@ const [loading, setLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
 
 function defaultConfig(): ProjectConfig {
-  return { contentDir: "src/posts", assetsDir: "src/assets" };
+  return { contentDir: "src/posts", assetsDir: "src/assets", postExtension: [".md", ".mdx"] };
 }
 
 async function loadConfig(dir: string): Promise<ProjectConfig> {
@@ -42,7 +43,12 @@ async function loadConfig(dir: string): Promise<ProjectConfig> {
         typeof parsed.contentDir === "string" ? parsed.contentDir : defaultConfig().contentDir;
       const assetsDir =
         typeof parsed.assetsDir === "string" ? parsed.assetsDir : defaultConfig().assetsDir;
-      return { contentDir, assetsDir };
+      const postExtension =
+        Array.isArray(parsed.postExtension) &&
+        parsed.postExtension.every((x) => typeof x === "string")
+          ? (parsed.postExtension as string[])
+          : defaultConfig().postExtension;
+      return { contentDir, assetsDir, postExtension };
     } catch {
       // try next
     }

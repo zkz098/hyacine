@@ -23,15 +23,19 @@ export function Workspace(): import("solid-js").JSX.Element {
     const dir = projectStore.projectDir();
     if (dir === null) return;
     const title = `新文章-${new Date().toISOString().slice(0, 10)}`;
-    const slug = title.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    // 标题全无 [a-z0-9] 时兜底成唯一 slug，避免生成 "-" 或空文件名
+    const slugBase = title.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const slug = slugBase.length > 0 ? slugBase : `post-${Date.now()}`;
     const content = `---\ntitle: ${title}\nslug: ${slug}\n\ndate: ${new Date().toISOString().slice(0, 10)}\ncategories: []\ndraft: true\n---\n\n正文...\n`;
     const cfg = projectStore.projectConfig();
     const contentDir = cfg?.contentDir ?? "src/posts";
-    const full = `${dir}/${contentDir}/${slug}.md`;
+    // 尊重项目声明的 postExtension（astro-blog 支持 .mdx），默认 .md
+    const ext = cfg?.postExtension?.[0] ?? ".md";
+    const full = `${dir}/${contentDir}/${slug}${ext}`;
     const { writeTextFile } = await import("../tauri/bridge");
     await writeTextFile(full, content);
     await projectStore.refreshPosts();
-    handleEdit(`${slug}.md`);
+    handleEdit(`${slug}${ext}`);
   };
 
   return (
