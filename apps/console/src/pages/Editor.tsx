@@ -243,7 +243,7 @@ export function Editor(): import("solid-js").JSX.Element {
           <button
             type="button"
             onClick={() => void handleAiSummary()}
-            disabled={aiLoading()}
+            disabled={aiLoading() || raw() === null}
             class="px-3 py-1.5 rounded border border-[var(--border)] text-sm hover:bg-[var(--surface)] disabled:opacity-50"
           >
             <span class="i-ri-sparkling-line mr-1" />
@@ -252,7 +252,7 @@ export function Editor(): import("solid-js").JSX.Element {
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving()}
+            disabled={saving() || raw() === null}
             class="px-4 py-1.5 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)] disabled:opacity-50"
           >
             {saving() ? t("common.loading") : t("editor.save")}
@@ -267,7 +267,21 @@ export function Editor(): import("solid-js").JSX.Element {
         <Alert variant="info">{msg()}</Alert>
       </Show>
 
-      <Show when={raw() === null}>
+      <Show when={raw() === null && path().length === 0}>
+        <div class="surface p-8 flex flex-col items-center gap-3 text-center">
+          <p class="text-sm text-muted">
+            未打开任何文章 —— 请先在工作台选择一个项目并打开文章
+          </p>
+          <a
+            href="#/workspace"
+            class="px-4 py-2 rounded bg-[var(--accent)] text-white text-sm hover:bg-[var(--accent-hover)]"
+          >
+            ← {t("workspace.title")}
+          </a>
+        </div>
+      </Show>
+
+      <Show when={raw() === null && path().length > 0}>
         <p class="text-sm text-muted">{t("common.loading")}</p>
       </Show>
 
