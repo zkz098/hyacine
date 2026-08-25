@@ -104,7 +104,11 @@ export function Install(): import("solid-js").JSX.Element {
       });
       setProjectDir(target);
       pushLog(`目标目录: ${target}`);
-      const r = await runShell("git", ["clone", "--depth", "1", url, target], target === dir ? dir : dir);
+      const r = await runShell(
+        "git",
+        ["clone", "--depth", "1", url, target],
+        target === dir ? dir : dir,
+      );
       pushLog(r.stdout || r.stderr);
       if (r.code !== 0) {
         patchStep(1, { status: "error", error: r.stderr || r.stdout || "git clone 失败" });
@@ -113,7 +117,10 @@ export function Install(): import("solid-js").JSX.Element {
       // 模板自带 hyacine.yml（astro-blog-shokax 根目录）
       const hasConfig = await exists(`${target}/hyacine.yml`);
       if (!hasConfig) {
-        patchStep(1, { status: "error", error: "克隆成功但缺少 hyacine.yml，请确认模板仓库正确。" });
+        patchStep(1, {
+          status: "error",
+          error: "克隆成功但缺少 hyacine.yml，请确认模板仓库正确。",
+        });
         return;
       }
       const configPreview = (await readTextFile(`${target}/hyacine.yml`)).slice(0, 200);
@@ -208,7 +215,9 @@ export function Install(): import("solid-js").JSX.Element {
                     : "border-[var(--border)] text-[var(--muted)] bg-[var(--surface)]"
             }`}
           >
-            <div class="font-semibold">{i + 1}. {s.title}</div>
+            <div class="font-semibold">
+              {i + 1}. {s.title}
+            </div>
             <div class="truncate">{s.description}</div>
           </div>
         ))}
@@ -221,9 +230,7 @@ export function Install(): import("solid-js").JSX.Element {
           <Alert variant="error">{stepError(0)}</Alert>
         </Show>
         <div class="text-sm flex flex-col gap-1">
-          <span class="text-muted">
-            Git：{deps().git === null ? "检测中/缺失" : deps().git}
-          </span>
+          <span class="text-muted">Git：{deps().git === null ? "检测中/缺失" : deps().git}</span>
           <span class="text-muted">
             pnpm：{deps().pnpm === null ? "未检测到（可跳过安装步骤）" : deps().pnpm}
           </span>
@@ -260,7 +267,11 @@ export function Install(): import("solid-js").JSX.Element {
             class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
           >
             <For each={CLONE_SOURCES}>
-              {(s) => <option value={s.key}>{s.label} — {s.description}</option>}
+              {(s) => (
+                <option value={s.key}>
+                  {s.label} — {s.description}
+                </option>
+              )}
             </For>
           </select>
         </label>

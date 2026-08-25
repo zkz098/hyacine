@@ -10,49 +10,59 @@ import {
 import { basename, dirname, extname, join, relative } from "node:path";
 import matter from "gray-matter";
 import { postBodyHash } from "../hash";
-import { slugify } from "../slugify";
-import { displaySlug, autoSlug } from "@hyacine/contract";
+import { displaySlug, autoSlug, getCollections } from "@hyacine/contract";
 import type { PostIndexEntry } from "@hyacine/contract";
 import type { ProjectConfig } from "../config/project";
 
+/** 有效集合目录列表（repo 相对） */
+export function collectionDirs(config: ProjectConfig): string[] {
+  return getCollections(config).map((c) => c.dir);
+}
+
+/**
+ * 扫描内容：path = repo 相对路径（如 src/posts/hello.md、src/moments/foo.md），
+ * 与 API 的 export/远程编辑、git workflow 天然一致（无需目录映射）。
+ */
 export function scanPosts(projectRoot: string, config: ProjectConfig): PostIndexEntry[] {
-  const contentDir = join(projectRoot, config.contentDir);
-  if (!existsSync(contentDir)) return [];
-  const files = collectFiles(contentDir, config.postExtension);
   const entries: PostIndexEntry[] = [];
-  for (const file of files) {
-    const rel = relative(contentDir, file).replace(/\\/g, "/");
-    const raw = readFileSync(file, "utf8");
-    const stat = statSync(file);
-    const parsed = matter(raw);
-    const data = parsed.data as Record<string, unknown>;
-    const title =
-      typeof data.title === "string" && data.title.length > 0
-        ? data.title
-        : basename(file, extname(file));
-    const slugRaw =
-      typeof data.slug === "string" && data.slug.length > 0 ? data.slug : slugify(title);
-    // 显示用：显式 slug 保留中文(不二次 ASCII 化)，退化/缺失时按标题生成(中文转拼音)
-    const slug = displaySlug(data.slug, title);
-    const draft = data.draft === true;
-    let categories: string[] = [];
-    if (Array.isArray(data.categories))
-      categories = data.categories.filter((x): x is string => typeof x === "string");
-    else if (typeof data.categories === "string" && data.categories.length > 0)
-      categories = [data.categories];
-    const hash = postBodyHash(raw);
-    const iso = stat.mtime.toISOString();
-    entries.push({
-      path: rel,
-      slug,
-      title,
-      draft,
-      categories,
-      hash,
-      createdAt: iso,
-      updatedAt: iso,
-      lastModified: iso,
-    });
+  const seen = new Set<string>();
+  for (const dir of collectionDirs(config)) {
+    const absDir = join(projectRoot, dir);
+    if (!existsSync(absDir)) continue;
+    for (const file of collectFiles(absDir, config.postExtension)) {
+      const rel = relative(projectRoot, file).replace(/\\/g, "/");
+      if (seen.has(rel)) continue;
+      seen.add(rel);
+      const raw = readFileSync(file, "utf8");
+      const stat = statSync(file);
+      const parsed = matter(raw);
+      const data = parsed.data as Record<string, unknown>;
+      const title =
+        typeof data.title === "string" && data.title.length > 0
+          ? data.title
+          : basename(file, extname(file));
+      // 显示用：显式 slug 保留中文(不二次 ASCII 化)，退化/缺失时按标题生成(中文转拼音)
+      const slug = displaySlug(data.slug, title);
+      const draft = data.draft === true;
+      let categories: string[] = [];
+      if (Array.isArray(data.categories))
+        categories = data.categories.filter((x): x is string => typeof x === "string");
+      else if (typeof data.categories === "string" && data.categories.length > 0)
+        categories = [data.categories];
+      const hash = postBodyHash(raw);
+      const iso = stat.mtime.toISOString();
+      entries.push({
+        path: rel,
+        slug,
+        title,
+        draft,
+        categories,
+        hash,
+        createdAt: iso,
+        updatedAt: iso,
+        lastModified: iso,
+      });
+    }
   }
   return entries;
 }
@@ -77,19 +87,20 @@ export function findPostByQuery(
   config: ProjectConfig,
   query: string,
 ): string | null {
-  const contentDir = join(projectRoot, config.contentDir);
-  if (!existsSync(contentDir)) return null;
-  const files = collectFiles(contentDir, config.postExtension);
   const lower = query.toLowerCase();
-  for (const file of files) {
-    const rel = relative(contentDir, file).replace(/\\/g, "/");
-    if (rel.toLowerCase().includes(lower)) return file;
-    const raw = readFileSync(file, "utf8");
-    const parsed = matter(raw);
-    const data = parsed.data as Record<string, unknown>;
-    const title = typeof data.title === "string" ? data.title.toLowerCase() : "";
-    const slug = typeof data.slug === "string" ? data.slug.toLowerCase() : "";
-    if (title.includes(lower) || slug.includes(lower)) return file;
+  for (const dir of collectionDirs(config)) {
+    const absDir = join(projectRoot, dir);
+    if (!existsSync(absDir)) continue;
+    for (const file of collectFiles(absDir, config.postExtension)) {
+      const rel = relative(projectRoot, file).replace(/\\/g, "/");
+      if (rel.toLowerCase().includes(lower)) return file;
+      const raw = readFileSync(file, "utf8");
+      const parsed = matter(raw);
+      const data = parsed.data as Record<string, unknown>;
+      const title = typeof data.title === "string" ? data.title.toLowerCase() : "";
+      const slug = typeof data.slug === "string" ? data.slug.toLowerCase() : "";
+      if (title.includes(lower) || slug.includes(lower)) return file;
+    }
   }
   return null;
 }
@@ -101,7 +112,8 @@ export function createPost(
   categories: string[] = [],
   draft = true,
 ): string {
-  const contentDir = join(projectRoot, config.contentDir);
+  const [first] = getCollections(config);
+  const contentDir = join(projectRoot, first?.dir ?? config.contentDir);
   mkdirSync(contentDir, { recursive: true });
   const slug = autoSlug(title);
   const filename = `${slug}.md`;

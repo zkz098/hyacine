@@ -13,7 +13,11 @@ export const CLONE_SOURCES: ReadonlyArray<{
 }> = [
   { key: "github", label: "Github", description: "直接使用 Github 官方源" },
   { key: "gh-proxy", label: "gh-proxy.com", description: "https://gh-proxy.org/{github链接}" },
-  { key: "gh-proxy-v6", label: "gh-proxy.com（IPv6）", description: "https://v6.gh-proxy.org/{github链接}" },
+  {
+    key: "gh-proxy-v6",
+    label: "gh-proxy.com（IPv6）",
+    description: "https://v6.gh-proxy.org/{github链接}",
+  },
 ];
 
 /** 解析最终克隆地址（github 原样；gh-proxy 代理需要完整 URL 跟在域名后） */
@@ -21,9 +25,7 @@ export function resolveCloneUrl(repository: string, source: CloneSource): string
   const repo = repository.trim().replace(/\/+$/, "");
   if (repo.length === 0) return "";
   if (source === "github") return repo;
-  return source === "gh-proxy"
-    ? `https://gh-proxy.org/${repo}`
-    : `https://v6.gh-proxy.org/${repo}`;
+  return source === "gh-proxy" ? `https://gh-proxy.org/${repo}` : `https://v6.gh-proxy.org/${repo}`;
 }
 
 /** 目录选择结果：直接克隆到该目录（空）或克隆到其下的唯一子目录 */

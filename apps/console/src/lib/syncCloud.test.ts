@@ -37,15 +37,15 @@ describe("buildCloudSyncPayload", () => {
     "C:/blog/src/assets/img/logo.png": { size: 500, mtime: "2026-08-03T00:00:00.000Z" },
   });
 
-  it("映射 posts 索引（路径相对 contentDir、时间戳来自 stat）", async () => {
+  it("映射 posts 索引（repo 相对路径、时间戳来自 stat）", async () => {
     const payload = await buildCloudSyncPayload(
       {
         projectRoot: "C:/blog",
-        contentDir: "src/posts",
+        collections: [{ name: "posts", dir: "src/posts" }],
         assetsDir: "src/assets",
         posts: [
           {
-            path: "a.md",
+            path: "src/posts/a.md",
             title: "A",
             slug: "a",
             draft: false,
@@ -58,7 +58,7 @@ describe("buildCloudSyncPayload", () => {
     );
     expect(payload.posts).toHaveLength(1);
     expect(payload.posts[0]).toMatchObject({
-      path: "a.md",
+      path: "src/posts/a.md",
       title: "A",
       slug: "a",
       draft: false,
@@ -73,7 +73,7 @@ describe("buildCloudSyncPayload", () => {
     const payload = await buildCloudSyncPayload(
       {
         projectRoot: "C:/blog",
-        contentDir: "src/posts",
+        collections: [{ name: "posts", dir: "src/posts" }],
         assetsDir: "src/assets",
         posts: [],
       },
@@ -89,29 +89,41 @@ describe("buildCloudSyncPayload", () => {
     });
   });
 
-  it("deletedPaths 恒为空数组（v1 不推断删除）", async () => {
-    const payload = await buildCloudSyncPayload(
-      {
-        projectRoot: "C:/blog",
-        contentDir: "src/posts",
-        assetsDir: "src/assets",
-        posts: [],
-      },
+  it("deletedPaths：无 lastPaths 不推断；有则按差集推断", async () => {
+    const args = {
+      projectRoot: "C:/blog",
+      collections: [{ name: "posts", dir: "src/posts" }],
+      assetsDir: "src/assets",
+      posts: [
+        {
+          path: "src/posts/a.md",
+          title: "A",
+          slug: "a",
+          draft: false,
+          categories: [],
+          hash: "aaa",
+        },
+      ],
+    };
+    const noLast = await buildCloudSyncPayload({ ...args, lastPaths: null }, io);
+    expect(noLast.deletedPaths).toEqual([]);
+    const withLast = await buildCloudSyncPayload(
+      { ...args, lastPaths: ["src/posts/a.md", "src/posts/old.md"] },
       io,
     );
-    expect(payload.deletedPaths).toEqual([]);
-    expect(payload.generatedAt).toEqual(expect.any(String));
+    expect(withLast.deletedPaths).toEqual(["src/posts/old.md"]);
+    expect(noLast.generatedAt).toEqual(expect.any(String));
   });
 
   it("stat 缺失时时间戳回退到当前时间", async () => {
     const payload = await buildCloudSyncPayload(
       {
         projectRoot: "C:/blog",
-        contentDir: "src/posts",
+        collections: [{ name: "posts", dir: "src/posts" }],
         assetsDir: "src/assets",
         posts: [
           {
-            path: "missing.md",
+            path: "src/posts/missing.md",
             title: "M",
             slug: "m",
             draft: true,
@@ -122,7 +134,11 @@ describe("buildCloudSyncPayload", () => {
       },
       io,
     );
-    expect(payload.posts[0]).toMatchObject({ path: "missing.md", draft: true, categories: ["x"] });
+    expect(payload.posts[0]).toMatchObject({
+      path: "src/posts/missing.md",
+      draft: true,
+      categories: ["x"],
+    });
     expect(payload.posts[0]?.updatedAt).toEqual(expect.any(String));
   });
 });

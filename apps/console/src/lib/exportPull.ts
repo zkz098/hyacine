@@ -3,6 +3,7 @@ import type { ExportPayload } from "@hyacine/contract";
 /**
  * Primary 双向同步的下行侧：把云端全量快照（export）写回本地内容目录，
  * 覆盖本地文件 → 刷新列表。IO 注入便于测试（不碰 Tauri）。
+ * snapshot.posts[].path 为 repo 相对路径（src/posts/hello.md、src/moments/foo.md）。
  */
 export interface ExportPullIO {
   writeTextFile(path: string, content: string): Promise<void>;
@@ -13,7 +14,6 @@ const SAFE_POST_PATH = /^[A-Za-z0-9_\-/\p{L}\p{N}]+\.(md|mdx)$/u;
 
 export async function pullExportToLocal(
   projectRoot: string,
-  contentDir: string,
   snapshot: ExportPayload,
   io: ExportPullIO,
 ): Promise<{ written: number; skipped: number }> {
@@ -25,7 +25,7 @@ export async function pullExportToLocal(
       skipped += 1;
       continue;
     }
-    const abs = `${projectRoot}/${contentDir}/${post.path}`;
+    const abs = `${projectRoot}/${post.path}`;
     await io.writeTextFile(abs, post.content);
     written += 1;
   }

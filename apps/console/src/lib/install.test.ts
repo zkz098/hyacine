@@ -9,9 +9,9 @@ describe("install 克隆源解析", () => {
   });
 
   it("gh-proxy 前缀拼接（保留完整 URL，代理需要）", () => {
-    expect(
-      resolveCloneUrl("https://github.com/theme-shoka-x/astro-blog-shokax", "gh-proxy"),
-    ).toBe("https://gh-proxy.org/https://github.com/theme-shoka-x/astro-blog-shokax");
+    expect(resolveCloneUrl("https://github.com/theme-shoka-x/astro-blog-shokax", "gh-proxy")).toBe(
+      "https://gh-proxy.org/https://github.com/theme-shoka-x/astro-blog-shokax",
+    );
     expect(resolveCloneUrl("https://github.com/a/b", "gh-proxy-v6")).toBe(
       "https://v6.gh-proxy.org/https://github.com/a/b",
     );

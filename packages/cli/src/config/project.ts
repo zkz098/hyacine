@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { parseProjectConfig, type ProjectConfig } from "@hyacine/contract";
+import { parseCollectionsFile, parseProjectConfig, type ProjectConfig } from "@hyacine/contract";
 
 const DEFAULT_CONFIG: ProjectConfig = {
   contentDir: "src/posts",
@@ -36,13 +36,41 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
   else if (existsSync(yamlPath)) raw = readFileSync(yamlPath, "utf8");
   else return { ...DEFAULT_CONFIG };
 
+  let config: ProjectConfig;
   try {
     // 解析与校验统一走 contract 的共享 schema（CLI/桌面/API 一致）
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- yaml parse returns any
     const parsed = parseYaml(raw) as unknown;
-    return parseProjectConfig(parsed);
+    config = parseProjectConfig(parsed);
   } catch {
     return { ...DEFAULT_CONFIG };
+  }
+  return mergeGeneratedCollections(projectRoot, config);
+}
+
+/**
+ * hyacine.yml 未声明 collections 时，合并 hyacine.collections.json（hyc collections
+ * 产物）的 name→dir，实现「生成即生效」；显式注册表优先，产物缺失/损坏则原样返回。
+ */
+export function mergeGeneratedCollections(
+  projectRoot: string,
+  config: ProjectConfig,
+): ProjectConfig {
+  if (config.collections !== undefined) return config;
+  const genPath = join(projectRoot, "hyacine.collections.json");
+  if (!existsSync(genPath)) return config;
+  try {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- JSON.parse any
+    const file = parseCollectionsFile(JSON.parse(readFileSync(genPath, "utf8")) as unknown);
+    if (file === null || file.collections.length === 0) return config;
+    const entries: Record<string, string> = {};
+    for (const c of file.collections) {
+      if (c.dir.length > 0 && !Object.hasOwn(entries, c.name)) entries[c.name] = c.dir;
+    }
+    if (Object.keys(entries).length === 0) return config;
+    return { ...config, collections: entries };
+  } catch {
+    return config;
   }
 }
 

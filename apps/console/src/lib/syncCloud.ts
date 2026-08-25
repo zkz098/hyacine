@@ -6,6 +6,7 @@
  */
 import type { AssetIndexEntry, AssetType, SyncPost, SyncUploadRequest } from "@hyacine/contract";
 import { statFile, readDirRecursive, readTextFile } from "../tauri/bridge";
+import type { CollectionSpec } from "@hyacine/contract";
 
 /** 桌面端本地的 IO 边界，构造 payload 时注入（默认走 Tauri bridge） */
 export interface CloudSyncIO {
@@ -19,7 +20,8 @@ export interface CloudSyncIO {
 export const defaultCloudSyncIO: CloudSyncIO = { readDirRecursive, statFile, readTextFile };
 
 type LocalPostLike = {
-  path: string; // 相对 contentDir
+  /** repo 相对路径（src/posts/hello.md） */
+  path: string;
   title: string;
   slug: string;
   draft: boolean;
@@ -75,13 +77,12 @@ async function scanCloudAssets(
 /** 把本地 post 索引映射为 SyncPost（content 可选；时间戳 stat mtime，兜底 now） */
 async function mapPostIndex(
   projectRoot: string,
-  contentDir: string,
   posts: LocalPostLike[],
   io: CloudSyncIO,
 ): Promise<SyncPost[]> {
   const out: SyncPost[] = [];
   for (const p of posts) {
-    const abs = `${projectRoot}/${contentDir}/${p.path}`;
+    const abs = `${projectRoot}/${p.path}`;
     const s = await io.statFile(abs);
     const now = new Date();
     const updatedAt = s?.mtime ?? now;
@@ -110,9 +111,11 @@ async function mapPostIndex(
 
 export interface BuildCloudSyncArgs {
   projectRoot: string;
-  contentDir: string;
+  collections: CollectionSpec[];
   assetsDir: string;
   posts: LocalPostLike[];
+  /** 上次上行的 path 集合（用于 deletedPaths 推断；null=不推断） */
+  lastPaths?: string[] | null;
 }
 
 /** 生成可直接交给 client.syncUpload 的 payload：generatedAt + posts + assets + deletedPaths */
@@ -121,14 +124,21 @@ export async function buildCloudSyncPayload(
   io: CloudSyncIO = defaultCloudSyncIO,
 ): Promise<SyncUploadRequest> {
   const [posts, assets] = await Promise.all([
-    mapPostIndex(args.projectRoot, args.contentDir, args.posts, io),
+    mapPostIndex(args.projectRoot, args.posts, io),
     scanCloudAssets(args.projectRoot, args.assetsDir, io),
   ]);
+  const currentPaths = posts.map((p) => p.path);
+  const deletedPaths: string[] = [];
+  if (Array.isArray(args.lastPaths)) {
+    const current = new Set(currentPaths);
+    for (const old of args.lastPaths) {
+      if (!current.has(old)) deletedPaths.push(old);
+    }
+  }
   return {
     generatedAt: new Date().toISOString(),
     posts,
     assets,
-    // v1：desktop 不维护“上次上行的 path 集合”，删除推断交给 API 侧 / 后续加本地 state
-    deletedPaths: [],
+    deletedPaths,
   };
 }

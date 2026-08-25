@@ -5,7 +5,7 @@ import { projectStore } from "../store/project";
 import { isTauri, writeTextFile } from "../tauri/bridge";
 import { buildCloudSyncPayload } from "../lib/syncCloud";
 import { pullExportToLocal } from "../lib/exportPull";
-import type { SyncUploadResponse } from "@hyacine/contract";
+import { getCollections, type SyncUploadResponse } from "@hyacine/contract";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 
@@ -62,20 +62,36 @@ export function Sync(): import("solid-js").JSX.Element {
       if (dir === null || cfg === null) {
         throw new Error("未选择博客目录，请先在「工作区」打开项目");
       }
+      // 上次成功上行的 path（localStorage，按项目目录隔离）——用于 deletedPaths 推断
+      const LS_KEY = `hyacine:lastSyncPaths:${dir}`;
+      let lastPaths: string[] | null = null;
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (raw !== null) lastPaths = JSON.parse(raw) as string[];
+      } catch {
+        lastPaths = null;
+      }
       const payload = await buildCloudSyncPayload({
         projectRoot: dir,
-        contentDir: cfg.contentDir,
+        collections: getCollections(cfg),
         assetsDir: cfg.assetsDir,
         posts,
+        lastPaths,
       });
       const client = apiStore.getClient();
       const res = await client.syncUpload(payload);
       setLastResult(res);
       setSyncNote(null);
+      // 记录本次上行 path 集合（升级自愈：旧相对路径会被推断为删除）
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(payload.posts.map((p) => p.path)));
+      } catch {
+        // 忽略持久化失败
+      }
       // Primary 模式：上行后下行（export 全量写回本地文件），实现双向同步
       if (primaryAvailable()) {
         const snapshot = await client.exportSnapshot();
-        const { written } = await pullExportToLocal(dir, cfg.contentDir, snapshot, {
+        const { written } = await pullExportToLocal(dir, snapshot, {
           writeTextFile,
         });
         setSyncNote(`${t("sync.pullDone")}（${String(written)} 篇）`);

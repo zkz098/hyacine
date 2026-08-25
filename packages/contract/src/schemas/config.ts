@@ -143,10 +143,15 @@ export const APP_CONFIG_KEYS = [
 
 // ---- ProjectConfig（博客项目布局，hyacine.yml） --------------------------
 
+/** 集合目录声明：name → repo 相对目录（如 posts: src/posts, moments: src/moments） */
+export const ProjectCollectionsSchema = z.record(z.string().min(1).max(64), z.string().min(1));
+
 export const ProjectConfigSchema = z.object({
   contentDir: z.string().min(1).default("src/posts"),
   assetsDir: z.string().min(1).default("src/assets"),
   postExtension: z.array(z.string().min(1)).default([".md", ".mdx"]),
+  /** 多集合注册表（缺省回退单集合 posts → contentDir） */
+  collections: ProjectCollectionsSchema.optional(),
   /** 博客主题的配置路径（astro-blog 侧用，桌面端可忽略） */
   themeConfigPath: z.string().min(1).nullable().default(null),
 });
@@ -164,4 +169,38 @@ export function parseProjectConfig(parsed: unknown): ProjectConfig {
   const result = ProjectConfigSchema.safeParse(parsed ?? {});
   if (!result.success) return { ...DEFAULT_PROJECT_CONFIG };
   return { ...DEFAULT_PROJECT_CONFIG, ...result.data };
+}
+
+/** 集合描述（getCollections 产出） */
+export interface CollectionSpec {
+  name: string;
+  /** repo 相对目录（不含尾部斜杠），如 src/posts */
+  dir: string;
+}
+
+/**
+ * 有效集合列表：注册表优先；缺省回退单集合 posts→contentDir。
+ * 目录统一 posix、去尾部斜杠；名去重（保留首现）。
+ */
+function normalizeDir(d: string): string {
+  return d.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
+export function getCollections(config: ProjectConfig): CollectionSpec[] {
+  const entries = config.collections ?? {};
+  const names = Object.keys(entries);
+  if (names.length > 0) {
+    const seen = new Set<string>();
+    const specs: CollectionSpec[] = [];
+    for (const name of names) {
+      const raw = entries[name];
+      if (typeof raw !== "string") continue;
+      const dir = normalizeDir(raw);
+      if (dir.length === 0 || seen.has(dir)) continue;
+      seen.add(dir);
+      specs.push({ name, dir });
+    }
+    if (specs.length > 0) return specs;
+  }
+  return [{ name: "posts", dir: normalizeDir(config.contentDir) }];
 }

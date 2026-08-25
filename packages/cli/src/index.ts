@@ -12,6 +12,7 @@ import { autoSlug } from "@hyacine/contract";
 import { materializeSummary, hasUpToDateSummary } from "./frontmatter";
 import { installBlog } from "./services/install";
 import { generateCollectionsFile } from "./collections/generate";
+import { getCollections } from "@hyacine/contract";
 import { scanPosts, findPostByQuery, createPost } from "./services/posts";
 import { buildSyncPayload, chunkText } from "./services/sync";
 import { createBackup } from "./services/backup";
@@ -256,7 +257,8 @@ program
       console.error(t("move.notFound", { query }));
       process.exit(1);
     }
-    const contentDir = join(root, config.contentDir);
+    const [first] = getCollections(config);
+    const contentDir = join(root, first?.dir ?? config.contentDir);
     const dest = join(contentDir, destDir, basename(found));
     mkdirSync(dirname(dest), { recursive: true });
     renameSync(found, dest);
@@ -619,7 +621,8 @@ program
       }
       const client = getClient();
       for (const post of targets) {
-        const filePath = join(root, config.contentDir, post.path);
+        // path 为 repo 相对（src/posts/hello.md）
+        const filePath = join(root, post.path);
         const raw = readFileSync(filePath, "utf8");
         if (opts.force !== true && hasUpToDateSummary(raw, post.hash)) {
           console.log(t("ai.summary.skipped", { path: post.path }));
@@ -724,7 +727,8 @@ program
     }
     const client = getClient();
     for (const post of targets) {
-      const filePath = join(root, config.contentDir, post.path);
+      // path 为 repo 相对（src/posts/hello.md）
+      const filePath = join(root, post.path);
       const raw = readFileSync(filePath, "utf8");
       const parsed = matter(raw);
       const chunks = chunkText(parsed.content, 800);

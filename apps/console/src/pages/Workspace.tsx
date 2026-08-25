@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import { t } from "../i18n";
-import { autoSlug } from "@hyacine/contract";
+import { autoSlug, getCollections } from "@hyacine/contract";
 import { isTauri, openFolderDialog } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import { useNavigate } from "@solidjs/router";
@@ -28,14 +28,15 @@ export function Workspace(): import("solid-js").JSX.Element {
     const slug = autoSlug(title);
     const content = `---\ntitle: ${title}\nslug: ${slug}\n\ndate: ${new Date().toISOString().slice(0, 10)}\ncategories: []\ndraft: true\n---\n\n正文...\n`;
     const cfg = projectStore.projectConfig();
-    const contentDir = cfg?.contentDir ?? "src/posts";
-    // 尊重项目声明的 postExtension（astro-blog 支持 .mdx），默认 .md
+    const [first] = cfg !== null ? getCollections(cfg) : [];
+    // 默认写入首个集合目录（尊重项目声明的 postExtension，默认 .md）
+    const collectionDir = first?.dir ?? "src/posts";
     const ext = cfg?.postExtension?.[0] ?? ".md";
-    const full = `${dir}/${contentDir}/${slug}${ext}`;
+    const full = `${dir}/${collectionDir}/${slug}${ext}`;
     const { writeTextFile } = await import("../tauri/bridge");
     await writeTextFile(full, content);
     await projectStore.refreshPosts();
-    handleEdit(`${slug}${ext}`);
+    handleEdit(`${collectionDir}/${slug}${ext}`);
   };
 
   return (

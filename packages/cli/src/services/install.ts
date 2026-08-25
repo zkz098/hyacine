@@ -13,9 +13,7 @@ export function resolveCloneUrl(repository: string, source: CloneSource): string
   const repo = repository.trim().replace(/\/+$/, "");
   if (repo.length === 0) return "";
   if (source === "github") return repo;
-  return source === "gh-proxy"
-    ? `https://gh-proxy.org/${repo}`
-    : `https://v6.gh-proxy.org/${repo}`;
+  return source === "gh-proxy" ? `https://gh-proxy.org/${repo}` : `https://v6.gh-proxy.org/${repo}`;
 }
 
 async function versionOf(program: string): Promise<string | null> {

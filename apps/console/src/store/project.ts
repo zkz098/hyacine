@@ -1,14 +1,24 @@
 import { createSignal } from "solid-js";
 import { parse as yamlParse } from "yaml";
-import { DEFAULT_PROJECT_CONFIG, parseProjectConfig, type ProjectConfig } from "@hyacine/contract";
+import {
+  DEFAULT_PROJECT_CONFIG,
+  getCollections,
+  parseCollectionsFile,
+  parseProjectConfig,
+  type ProjectConfig,
+} from "@hyacine/contract";
 import { displaySlug } from "@hyacine/contract";
 import { isTauri, readDirRecursive, readTextFile } from "../tauri/bridge";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
 
 export interface LocalPostInfo {
-  path: string; // 相对 contentDir 的路径，如 "hello.md"
-  fullPath: string; // 绝对路径
+  /** repo 相对路径（如 src/posts/hello.md、src/moments/foo.md） */
+  path: string;
+  /** 绝对路径 */
+  fullPath: string;
+  /** 所属集合名（getCollections 注册表；缺省 posts） */
+  collection: string;
   title: string;
   slug: string;
   draft: boolean;
@@ -26,17 +36,36 @@ const [error, setError] = createSignal<string | null>(null);
 
 async function loadConfig(dir: string): Promise<ProjectConfig> {
   const candidates = [`${dir}/hyacine.yml`, `${dir}/hyacine.yaml`];
+  let config: ProjectConfig = { ...DEFAULT_PROJECT_CONFIG };
   for (const p of candidates) {
     try {
       const raw = await readTextFile(p);
       // 解析校验统一走 contract 共享 schema（与 CLI 一致）
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- yaml parse returns any
-      return parseProjectConfig(yamlParse(raw) as unknown);
+      config = parseProjectConfig(yamlParse(raw) as unknown);
+      break;
     } catch {
       // try next
     }
   }
-  return { ...DEFAULT_PROJECT_CONFIG };
+  // hyacine.yml 未声明 collections 时合并 hyc collections 产物（生成即生效）
+  if (config.collections === undefined) {
+    try {
+      const gen = await readTextFile(`${dir}/hyacine.collections.json`);
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- JSON.parse any
+      const file = parseCollectionsFile(JSON.parse(gen) as unknown);
+      if (file !== null && file.collections.length > 0) {
+        const entries: Record<string, string> = {};
+        for (const c of file.collections) {
+          if (c.dir.length > 0 && !Object.hasOwn(entries, c.name)) entries[c.name] = c.dir;
+        }
+        if (Object.keys(entries).length > 0) config = { ...config, collections: entries };
+      }
+    } catch {
+      // 无产物或损坏 → 保持原配置
+    }
+  }
+  return config;
 }
 function extractTitle(data: Record<string, unknown>, fallback: string): string {
   const t = data.title;
@@ -65,42 +94,55 @@ export async function refreshPosts(): Promise<void> {
   setLoading(true);
   setError(null);
   try {
-    const contentAbs = `${dir}/${cfg.contentDir}`;
-    const files = await readDirRecursive(contentAbs);
-    const mdFiles = files.filter((f) => f.endsWith(".md") || f.endsWith(".mdx"));
+    const collections = getCollections(cfg);
     const infos: LocalPostInfo[] = [];
     const fileErrors: string[] = [];
-    for (const full of mdFiles) {
+    let totalFiles = 0;
+    for (const coll of collections) {
+      const contentAbs = `${dir}/${coll.dir}`;
+      let files: string[];
       try {
-        const raw = await readTextFile(full);
-        const parsed = parseFrontmatter(raw);
-        const data = parsed.data;
-        const rel = full.startsWith(`${contentAbs}/`) ? full.slice(contentAbs.length + 1) : full;
-        const title = extractTitle(data, rel.replace(/\.(md|mdx)$/, ""));
-        const slug = extractSlug(data, title);
-        const draft = data.draft === true;
-        const categories = Array.isArray(data.categories)
-          ? (data.categories as unknown[]).filter((x): x is string => typeof x === "string")
-          : typeof data.categories === "string" && data.categories.length > 0
-            ? [data.categories]
-            : [];
-        const hash = postBodyHash(raw);
-        const summaryPresent = typeof data.summary === "string" && data.summary.length > 0;
-        infos.push({
-          path: rel,
-          fullPath: full,
-          title,
-          slug,
-          draft,
-          categories,
-          hash,
-          summaryPresent,
-          updatedAt: "",
-        });
-      } catch (e: unknown) {
-        // 收集真实失败原因，避免“静默空列表”掩盖问题
-        const reason = e instanceof Error ? e.message : String(e);
-        if (fileErrors.length < 3) fileErrors.push(`${full}: ${reason}`);
+        files = await readDirRecursive(contentAbs);
+      } catch {
+        continue; // 集合目录不存在 → 跳过
+      }
+      const mdFiles = files.filter((f) => f.endsWith(".md") || f.endsWith(".mdx"));
+      totalFiles += mdFiles.length;
+      for (const full of mdFiles) {
+        try {
+          const raw = await readTextFile(full);
+          const parsed = parseFrontmatter(raw);
+          const data = parsed.data;
+          const rel = full.startsWith(`${contentAbs}/`) ? full.slice(contentAbs.length + 1) : full;
+          // repo 相对（含集合目录前缀）
+          const repoRel = `${coll.dir}/${rel}`;
+          const title = extractTitle(data, rel.replace(/\.(md|mdx)$/, ""));
+          const slug = extractSlug(data, title);
+          const draft = data.draft === true;
+          const categories = Array.isArray(data.categories)
+            ? (data.categories as unknown[]).filter((x): x is string => typeof x === "string")
+            : typeof data.categories === "string" && data.categories.length > 0
+              ? [data.categories]
+              : [];
+          const hash = postBodyHash(raw);
+          const summaryPresent = typeof data.summary === "string" && data.summary.length > 0;
+          infos.push({
+            path: repoRel,
+            fullPath: full,
+            collection: coll.name,
+            title,
+            slug,
+            draft,
+            categories,
+            hash,
+            summaryPresent,
+            updatedAt: "",
+          });
+        } catch (e: unknown) {
+          // 收集真实失败原因，避免“静默空列表”掩盖问题
+          const reason = e instanceof Error ? e.message : String(e);
+          if (fileErrors.length < 3) fileErrors.push(`${full}: ${reason}`);
+        }
       }
     }
     // 按 path 排序
@@ -108,12 +150,12 @@ export async function refreshPosts(): Promise<void> {
     setPosts(infos);
     if (infos.length > 0) {
       setError(null);
-    } else if (mdFiles.length === 0) {
-      setError(`在 ${contentAbs} 下未发现任何 .md/.mdx 文件（readDir 返回 ${files.length} 项）`);
-    } else if (fileErrors.length > 0) {
+    } else if (totalFiles === 0) {
       setError(
-        `扫描到 ${mdFiles.length} 个文件但读取全部失败，前几个错误：${fileErrors.join(" | ")}`,
+        `在集合目录（${collections.map((c) => c.dir).join(", ")}）下未发现任何 .md/.mdx 文件`,
       );
+    } else if (fileErrors.length > 0) {
+      setError(`扫描到 ${totalFiles} 个文件但读取全部失败，前几个错误：${fileErrors.join(" | ")}`);
     }
   } catch (err: unknown) {
     setError(err instanceof Error ? err.message : String(err));

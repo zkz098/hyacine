@@ -32,14 +32,45 @@ describe("scanPosts", () => {
     expect(posts).toHaveLength(1);
     expect(posts[0]?.title).toBe("Hello");
     expect(posts[0]?.slug).toBe("hello");
+    expect(posts[0]?.path).toBe("src/posts/hello.md");
     expect(posts[0]?.hash).toMatch(/^[0-9a-f]{16}$/);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("多集合：collections 注册表 → repo 相对路径，覆盖全部目录", () => {
+    const { root, config } = makeTmpProject();
+    const multi: ProjectConfig = {
+      ...config,
+      collections: { posts: "src/posts", moments: "src/moments" },
+    };
+    mkdirSync(join(root, "src/moments"), { recursive: true });
+    writeFileSync(join(root, "src/posts", "hello.md"), `---\ntitle: Hello\n---\n\nW\n`, "utf8");
+    writeFileSync(
+      join(root, "src/moments", "beautiful-day.md"),
+      `---\ndate: 2026-01-01\n---\n\nM\n`,
+      "utf8",
+    );
+    const posts = scanPosts(root, multi);
+    expect(posts.map((p) => p.path).toSorted()).toEqual([
+      "src/moments/beautiful-day.md",
+      "src/posts/hello.md",
+    ]);
+    const moment = posts.find((p) => p.path.includes("moments"));
+    expect(moment?.title).toBe("beautiful-day");
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("缺省集合：无注册表回退 posts→contentDir（path 仍为 repo 相对）", () => {
+    const { root, config } = makeTmpProject();
+    writeFileSync(join(root, "src/posts", "a.md"), `---\ntitle: A\n---\n\nA\n`, "utf8");
+    expect(scanPosts(root, config)[0]?.path).toBe("src/posts/a.md");
     rmSync(root, { recursive: true, force: true });
   });
 
   it("createPost and findPostByQuery", () => {
     const { root, config } = makeTmpProject();
     const rel = createPost(root, config, "My Title", ["cat"], true);
-    expect(rel).toContain("my-title.md");
+    expect(rel).toBe("src/posts/my-title.md");
     expect(existsSync(join(root, rel))).toBe(true);
     const found = findPostByQuery(root, config, "my-title");
     expect(found).not.toBeNull();
@@ -72,7 +103,7 @@ describe("buildSyncPayload", () => {
     const lastPaths = first.posts.map((p) => p.path);
     unlinkSync(join(root, "src/posts", "b.md"));
     const second = buildSyncPayload(root, config, lastPaths);
-    expect(second.deletedPaths).toContain("b.md");
+    expect(second.deletedPaths).toContain("src/posts/b.md");
     expect(second.posts).toHaveLength(1);
     rmSync(root, { recursive: true, force: true });
   });

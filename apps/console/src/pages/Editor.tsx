@@ -83,7 +83,8 @@ export function Editor(): import("solid-js").JSX.Element {
   const [previewSrc, setPreviewSrc] = createSignal("");
   // 语法插件：启用列表（设置）+ 项目插件（.hyacine/plugins）
   const [enabledPlugins, setEnabledPlugins] = createSignal(loadEnabledPlugins());
-  const [userPlugins, setUserPlugins] = createSignal<SyntaxPlugin[]>([]);  const [pluginsError, setPluginsError] = createSignal<string | null>(null);
+  const [userPlugins, setUserPlugins] = createSignal<SyntaxPlugin[]>([]);
+  const [pluginsError, setPluginsError] = createSignal<string | null>(null);
   const [pluginRevision, setPluginRevision] = createSignal(0);
   const [previewNode] = createResource(
     () => [previewSrc(), pluginRevision()] as const,

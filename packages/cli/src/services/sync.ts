@@ -61,7 +61,8 @@ export function buildSyncPayload(
   const currentPaths = posts.map((p) => p.path);
   // 携带正文：API 落 posts.content，解锁服务端自动 AI / Primary 远程编辑（P0）
   const postsWithContent = posts.map((p) => {
-    const full = join(projectRoot, config.contentDir, p.path);
+    // path 已为 repo 相对（如 src/posts/hello.md）
+    const full = join(projectRoot, p.path);
     let content: string | undefined;
     try {
       content = readFileSync(full, "utf8");
