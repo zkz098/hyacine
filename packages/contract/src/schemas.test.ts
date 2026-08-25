@@ -52,6 +52,14 @@ describe("common schemas", () => {
     expect(SlugSchema.safeParse("hello_world").success).toBe(false);
   });
 
+  it("slug/path 支持中文（中文博客，与新版 slug 策略一致）", () => {
+    expect(SlugSchema.safeParse("我的文章").success).toBe(true);
+    expect(SlugSchema.safeParse("ni-hao-shi-jie").success).toBe(true);
+    expect(SlugSchema.safeParse("my-标题").success).toBe(true);
+    expect(PostPathSchema.safeParse("你好世界.md").success).toBe(true);
+    expect(PostPathSchema.safeParse("posts/你好.md").success).toBe(true);
+  });
+
   it("scope 枚举固定四值", () => {
     expect(ScopeSchema.safeParse("admin").success).toBe(true);
     expect(ScopeSchema.safeParse("owner").success).toBe(false);

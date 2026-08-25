@@ -5,15 +5,15 @@ export const HashSchema = z.string().regex(/^[0-9a-f]{8,128}$/i);
 
 export type Hash = z.infer<typeof HashSchema>;
 
-/** 相对内容目录的 post 路径：无前导斜杠、无 ..、以 .md/.mdx 结尾 */
+/** 相对内容目录的 post 路径：无前导斜杠、无 ..、以 .md/.mdx 结尾（允许 Unicode 文件名，中文博客必需） */
 export const PostPathSchema = z
   .string()
-  .regex(/^(?!\/)(?!.*\.\.)(?!.*\/\.)[a-zA-Z0-9_\-/]+\.(md|mdx)$/i);
+  .regex(/^(?!\/)(?!.*\.\.)(?!.*\/\.)[\p{L}\p{N}_\-/]+\.(md|mdx)$/iu);
 
 export type PostPath = z.infer<typeof PostPathSchema>;
 
-/** slug：小写字母/数字/连字符 */
-export const SlugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i);
+/** slug：小写字母/数字/连字符（Unicode：保留中文等非拉丁文字） */
+export const SlugSchema = z.string().regex(/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u);
 
 export type Slug = z.infer<typeof SlugSchema>;
 

@@ -61,12 +61,16 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
         deletedPaths.push(deleted);
       }
     }
+    // 仅当没有任何保留文章引用该 hash 时才清 ai_results，避免两篇同内容
+    // (同 hash) 文章因删一篇而被误删另一篇的 AI 产物
+    const keptHashes = new Set<string>();
+    for (const [path, hash] of existingMap) {
+      if (!deletedPaths.includes(path)) keptHashes.add(hash);
+    }
     for (const deleted of deletedPaths) {
       await c.env.DB.prepare("DELETE FROM posts WHERE path = ?").bind(deleted).run();
-      // also clean ai_results
-      // we need hash for that post before deletion — we have it in existingMap
       const hash = existingMap.get(deleted);
-      if (hash !== undefined) {
+      if (hash !== undefined && !keptHashes.has(hash)) {
         await c.env.DB.prepare("DELETE FROM ai_results WHERE hash = ?").bind(hash).run();
       }
     }

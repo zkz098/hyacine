@@ -22,17 +22,22 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * 剥离 frontmatter（供送 AI 使用）。
+ * 只认文档开头是 `---\n`；结束行必须**精确等于** `---`（不允许 trim，
+ * 避免正文/前言的缩进 `---` 或 hr 被误判为结束）。与 CLI 的 gray-matter
+ * 语义保持一致：找到首个精确闭合围栏即停。
+ */
 export function stripFrontmatter(content: string): string {
   if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
     return content;
   }
   const lines = content.split("\n");
-  // Find closing ---
   let endIndex = -1;
   for (let index = 1; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line === undefined) continue;
-    if (line.trim() === "---") {
+    const line = lines[index] ?? "";
+    const stripped = line.endsWith("\r") ? line.slice(0, -1) : line;
+    if (stripped === "---") {
       endIndex = index;
       break;
     }

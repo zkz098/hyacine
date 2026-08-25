@@ -18,6 +18,7 @@ interface PostJoinRow {
   summary_at: string | null;
   embed_model: string | null;
   embed_at: string | null;
+  embed_vec: string | null;
 }
 
 function isPresent(value: string | null | undefined): value is string {
@@ -25,9 +26,13 @@ function isPresent(value: string | null | undefined): value is string {
 }
 
 function parseCategories(raw: string): string[] {
-  const parsed = JSON.parse(raw) as unknown;
-  if (Array.isArray(parsed)) {
-    return parsed.filter((x): x is string => typeof x === "string");
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === "string");
+    }
+  } catch {
+    // 脏数据（历史/手改）不炸列表
   }
   return [];
 }
@@ -50,7 +55,8 @@ function toListItem(row: PostJoinRow): PostListItem {
         at: row.summary_at ?? null,
       },
       embed: {
-        present: isPresent(row.embed_model) && isPresent(row.embed_at),
+        // 与 sync/ai-status 口径一致：以 embed_vec 是否有值判定（而不是 model/at）
+        present: isPresent(row.embed_vec),
         model: row.embed_model ?? null,
         at: row.embed_at ?? null,
       },
@@ -65,7 +71,7 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
       `SELECT p.path, p.slug, p.title, p.draft, p.categories, p.hash,
               p.created_at, p.updated_at, p.last_modified,
               a.summary, a.summary_model, a.summary_at,
-              a.embed_model, a.embed_at
+              a.embed_model, a.embed_at, a.embed_vec
        FROM posts p
        LEFT JOIN ai_results a ON a.hash = p.hash
        ORDER BY datetime(p.updated_at) DESC`,

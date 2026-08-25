@@ -2,6 +2,7 @@
 import type { Context, Next } from "hono";
 import { sha256Hex } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
+import { defer } from "../utils/defer";
 import type { Env, Variables } from "../types";
 
 export function authMiddleware(requiredScopes: string[] = []) {
@@ -57,14 +58,18 @@ export function authMiddleware(requiredScopes: string[] = []) {
     c.set("scopes", scopes);
     c.set("label", row.label);
 
-    // fire-and-forget update last_used (do not await to avoid latency)
+    // 后台更新 last_used_at：必须 waitUntil，否则 Workers 可能在响应返回后
+    // 冻结 isolate，floating promise 被静默丢弃（CF 明确要求 await/waitUntil）
     const now = new Date().toISOString();
-    c.env.DB.prepare("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?")
-      .bind(now, tokenHash)
-      .run()
-      .catch(() => {
-        // ignore
-      });
+    defer(
+      c,
+      c.env.DB.prepare("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?")
+        .bind(now, tokenHash)
+        .run()
+        .catch(() => {
+          // ignore
+        }),
+    );
 
     await next();
     return;

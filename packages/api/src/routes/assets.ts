@@ -17,7 +17,7 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       return c.json(errorBody("validation_error", "参数错误", parsed.error.flatten()), 400);
     }
 
-    const { key, contentType, size } = parsed.data;
+    const { key, contentType } = parsed.data;
 
     const endpoint = c.env.R2_S3_ENDPOINT;
     const accessKeyId = c.env.R2_ACCESS_KEY_ID;
@@ -54,7 +54,9 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       key,
       url,
       method: "PUT" as const,
-      headers: { "content-type": contentType, "content-length": String(size) },
+      // content-type 已纳入签名，客户端必须带；不要返回 content-length
+      // （浏览器 fetch 的 forbidden header，会被静默忽略）
+      headers: { "content-type": contentType },
       expiresAt,
     });
   });

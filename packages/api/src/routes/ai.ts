@@ -8,6 +8,7 @@ import {
 } from "@hyacine/contract";
 import { cosine, meanPool, stripFrontmatter } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
+import { defer } from "../utils/defer";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
@@ -38,13 +39,12 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       }
     }
 
-    // Also check KV cache
+    // KV 缓存读取：D1 未命中时查 KV，命中直接返回（缓存键含模型，避免跨模型误命中）
     if (c.env.CACHE !== undefined) {
       try {
         const kvValue = await c.env.CACHE.get(`ai:${hash}:${usedModel}`);
-        if (kvValue !== null) {
-          // verify D1 still missing? but trust KV?
-          // Actually if D1 has value with same model we already returned. So KV only for hit when D1 lost? Just try to parse.
+        if (kvValue !== null && kvValue.length > 0) {
+          return c.json({ hash, summary: kvValue, model: usedModel, sourceHash: hash });
         }
       } catch {
         // ignore KV errors
@@ -118,13 +118,16 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       .bind(hash, summaryText, usedModel, now)
       .run();
 
-    // KV cache
+    // KV 缓存写入：defer（线上 waitUntil）保证落盘，floating promise 会被丢弃
     if (c.env.CACHE !== undefined) {
-      c.env.CACHE.put(`ai:${hash}:${usedModel}`, summaryText, {
-        expirationTtl: 7 * 24 * 3600,
-      }).catch(() => {
-        // ignore
-      });
+      defer(
+        c,
+        c.env.CACHE.put(`ai:${hash}:${usedModel}`, summaryText, {
+          expirationTtl: 7 * 24 * 3600,
+        }).catch(() => {
+          // ignore
+        }),
+      );
     }
 
     return c.json({ hash, summary: summaryText, model: usedModel, sourceHash: hash });

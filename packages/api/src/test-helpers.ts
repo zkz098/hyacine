@@ -304,9 +304,15 @@ export class FakeD1Database {
 
     if (lower.includes("from api_tokens")) {
       let rows = [...this.tokens.values()];
-      if (lower.includes("where token_hash =")) {
+      if (lower.includes("where token_hash =") && !lower.includes(">=")) {
         const [hash] = params as [string];
         rows = rows.filter((row) => row.token_hash === hash);
+      } else if (lower.includes("token_hash >=")) {
+        // 前缀范围查询（revoke 用）：token_hash >= id AND token_hash < id+\uffff
+        const [id] = params as [string];
+        rows = rows.filter(
+          (row) => row.token_hash >= id && row.token_hash < `${id}\uffff`,
+        );
       }
       // Order by created_at DESC for list
       if (lower.includes("order by created_at desc")) {

@@ -2,6 +2,11 @@ name = "hyacine-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-24"
 
+# 本地（wrangler dev --local）用占位 id；remote 部署前必须替换为真实资源 id：
+#   wrangler d1 create hyacine           -> database_id
+#   wrangler kv namespace create CACHE   -> id
+#   wrangler r2 bucket create hyacine-assets（bucket_name 已在配置）
+#   wrangler secret put SETUP_CODE / AI_SUMMARY_KEY / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
 [[d1_databases]]
 binding = "DB"
 database_name = "hyacine"

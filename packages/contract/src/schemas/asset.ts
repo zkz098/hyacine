@@ -23,10 +23,10 @@ export type AssetIndexEntry = z.infer<typeof AssetIndexEntrySchema>;
 
 /** R2 presign 请求：CLI/管理台上传图片直传 R2，不经 Worker 字节 */
 export const PresignRequestSchema = z.object({
-  /** 相对 assetsDir 的目标路径（作为 R2 key 前缀的一部分） */
+  /** 相对 assetsDir 的目标路径（作为 R2 key 前缀的一部分；允许 Unicode 文件名） */
   key: z
     .string()
-    .regex(/^[a-zA-Z0-9_\-/]+(\.[a-zA-Z0-9]+)?$/)
+    .regex(/^[\p{L}\p{N}_\-/]+(\.[\p{L}\p{N}]+)?$/u)
     .max(512),
   contentType: z.string().min(1).max(128),
   size: z
