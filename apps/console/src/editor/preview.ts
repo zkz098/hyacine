@@ -210,6 +210,34 @@ const Divider: ComponentRenderer = () => {
   return hr;
 };
 
+/* Quiz 交互组件：预览按静态结构渲染（对齐 .astro 输出，交互由博客端 client 驱动） */
+const Quiz: ComponentRenderer = (p) =>
+  wrap("div", `quiz-item ${p.type ?? "single"}`.trim(), p, (node) => {
+    node.setAttribute("data-quiz-type", String(p.type ?? "single"));
+  });
+const QuizGroup: ComponentRenderer = (p) => wrap("div", "quiz-group", p);
+const QuizOptions: ComponentRenderer = (p) => wrap("ul", "quiz-options", p);
+const QuizOption: ComponentRenderer = (p) =>
+  wrap("li", "quiz-option", p, (node) => {
+    if (p.correct === true) node.setAttribute("data-correct", "true");
+  });
+const QuizAnswer: ComponentRenderer = (p) => wrap("div", "quiz-answer", p);
+const QuizGap: ComponentRenderer = (p) => {
+  // 博客用 {answer}（children 被忽略），预览保持一致
+  const span = document.createElement("span");
+  span.className = "quiz-gap";
+  span.setAttribute("aria-label", "填空题答案占位");
+  const answer = p.answer === undefined ? "" : String(p.answer);
+  if (answer.length > 0) span.setAttribute("data-answer", answer);
+  span.append(document.createTextNode(answer));
+  return span;
+};
+const QuizMistake: ComponentRenderer = (p) =>
+  wrap("div", "quiz-mistake", p, (node) => {
+    const dt = p.dataType === undefined ? "错题备注" : String(p.dataType);
+    node.setAttribute("data-type", dt);
+  });
+
 export const shokaxComponents: Record<string, ComponentRenderer> = {
   Note,
   Label,
@@ -226,6 +254,13 @@ export const shokaxComponents: Record<string, ComponentRenderer> = {
   Tabs,
   Tab,
   Divider,
+  Quiz,
+  QuizGroup,
+  QuizOptions,
+  QuizOption,
+  QuizAnswer,
+  QuizGap,
+  QuizMistake,
 };
 
 /* ---------------- 渲染管线 ---------------- */
@@ -336,10 +371,13 @@ async function highlightCodeBlocks(wrapper: HTMLElement): Promise<void> {
     if (pre === null) continue;
     const langClass = Array.from(code.classList).find((c) => c.startsWith("language-"));
     const lang = langClass === undefined ? "text" : langClass.slice("language-".length);
-    if (lang === "text" || shikiApi === null) continue;
+    // satteri 的 features.math 会把数学烘成 language-math 代码块；预览暂不
+    // 高亮（katex 渲染后置），否则 shiki 报 "Language `math` is not included"。
+    if (lang === "text" || lang === "math" || shikiApi === null) continue;
     const src = code.textContent ?? "";
     try {
-      const html = shikiApi.codeToHtml(src, {
+      // 必须 await：codeToHtml 返回 Promise，漏 await 会拒绝成 unhandled rejection
+      const html = await shikiApi.codeToHtml(src, {
         lang,
         themes: { light: "github-light", dark: "github-dark" },
         transformers: transformerList,

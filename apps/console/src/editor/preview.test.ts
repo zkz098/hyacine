@@ -37,6 +37,17 @@ describe("satteri 一致性命中（evaluate + 组件映射）", () => {
     expect(code?.textContent).toContain("const a");
   });
 
+  it("Quiz 组件族不再缺失（回归：Expected component QuizGroup）", async () => {
+    const out = await renderPreview(
+      "<QuizGroup><Quiz type=\"single\"><QuizOptions><QuizOption correct>对</QuizOption></QuizOptions><QuizAnswer>解释</QuizAnswer></Quiz></QuizGroup>",
+      true,
+    );
+    expect(out.querySelector(".quiz-group")).not.toBeNull();
+    expect(out.querySelector(".quiz-item.single")).not.toBeNull();
+    expect(out.querySelector("li.quiz-option[data-correct]")).not.toBeNull();
+    expect(out.querySelector(".quiz-answer")?.textContent).toContain("解释");
+  });
+
   it("frontmatter 被剥离", async () => {
     const out = await renderPreview("---\ntitle: T\n---\n正文", false);
     expect(out.textContent).not.toContain("title: T");

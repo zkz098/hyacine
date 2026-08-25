@@ -347,6 +347,9 @@ export function Editor(): import("solid-js").JSX.Element {
               {isPreviewBusy() ? (
                 <span class="text-xs text-muted">{t("common.loading")}</span>
               ) : null}
+              <Show when={previewNode.error}>
+                <Alert variant="error">预览渲染失败：{messageOf(previewNode.error)}</Alert>
+              </Show>
             </div>
 
             <div
