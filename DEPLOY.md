@@ -251,10 +251,31 @@ curl -X PUT https://<worker>/api/admin/config \
 1. **配置 GitHub**：管理台 → 设置 → 云端配置 → `Primary（GitHub 桥）`：仓库 Owner / 仓库名 / PAT（需 `repo` scope，仅用于 repository_dispatch）。对应 `github.repoOwner/repoName/token`。
 2. **安装桥 workflow**：把 `packages/api/workflows/hyacine-bridge.yml` 复制到博客仓库 `.github/workflows/`，并配 GitHub Actions Secrets：`HYACINE_API_URL`（Worker 地址）、`HYACINE_TOKEN`（带 posts.w/r 的 hyacine token）。
 3. **远程编辑**：管理台 Posts 页 →「远程编辑」→ 改正文 → 保存 → API 解析 frontmatter/hash 落 D1（联动自动 AI）→ 自动 `repository_dispatch('hyacine:export')` → workflow 拉 `/api/export` 全量快照写文件 → `hyacine:sync` commit（`GITHUB_TOKEN` 提交不回环）→ push 触发博客构建。
-4. **git → D1**：main 分支普通 push → workflow import job 收集变更 `.md/.mdx` → `POST /api/posts` 上传 → API 解析落 D1。
+4. **git → D1**：main 分支普通 push → workflow import job 收集集合目录下变更 `.md/.mdx` → `POST /api/posts` 上传 → API 解析落 D1。
 5. **手动导出**：管理台 Sync 页「导出到 Git」→ `POST /api/export/trigger`。
 
 > **冲突语义**：双真相源 = 最后写入者胜（`updated_at`/提交时间）。**避免两端同时编辑同一文件**；导出为全量覆盖（`git add -A` 提交，已删文章随之移除）。
+
+### 3.11 多内容集合（P0/P1/P2）
+
+博客可能存在多个内容集合（如 astro-blog-shokax 的 `posts` + `moments`）：
+
+1. **生成集合类型信息**：在博客仓库根执行 `hyc collections` → 运行时读取 `src/content.config.ts`（jiti 加载 + astro 虚拟模块 shim）→ 生成**可提交**的 `hyacine.collections.json`（每集合：name/dir/pattern/扩展名 + 输入形状 JSON Schema + ui 字段描述：date/enum/string[]/secret/image）。字段级信息用于管理台表单渲染与保存前校验。
+   - 降级：无配置文件或 astro 未安装时读 `.astro/collections/*.schema.json`（需先跑 `astro sync`），目录猜测 `src/<name>`。
+   - 弱来源（降级）不覆盖已有强来源文件；`--force` 强制覆盖。
+2. **集合注册**：`hyacine.yml` 显式声明 `collections:`（name → 目录）。未声明时自动合并 `hyacine.collections.json` 的 name → dir（**生成即生效**），缺省回退单集合 `posts → contentDir`。
+   ```yaml
+   contentDir: src/posts
+   collections:
+     posts: src/posts
+     moments: src/moments
+   ```
+3. **路径语义（重要）**：内容路径为 **repo 相对**（`src/posts/hello.md`、`src/moments/foo.md`）。CLI/桌面 scan 全部集合目录；`/api/export` 快照与 git workflow 直接按 repo 相对写回/上传，**无需目录映射**。
+   - 升级：一次 `hyc sync`（或桌面 Sync 页）后旧的相对 contentDir 路径自愈删除（deletedPaths 差集）。
+4. **workflow v2**：`hyacine-bridge.yml` 从 `hyacine.collections.json` 读取集合目录（兜底 `src/posts`），import job 只收集集合目录下变更文件，export job 按 repo 相对路径写回。
+5. **集合过滤**：`GET /api/posts?prefix=<dir>` 按目录前缀过滤（如 `prefix=src/moments`）；管理台 Posts 页显示「集合」列。
+
+> AI autogen 目前全集合生效；若要按集合关闭（如 moments 不生成摘要/嵌入），后续在云端配置加路径前缀规则即可。
 
 ## 4. CLI
 
@@ -282,7 +303,8 @@ hyc tokens:list   # 管理 token
 |---|---|
 | `hyc install [dir]`（别名 `setup`） | 安装博客（克隆 `theme-shoka-x/astro-blog-shokax` 模板，`--source github/gh-proxy/gh-proxy-v6`，`--install` 装依赖） |
 | `hyc init` | 现有目录初始化 `hyacine.yml` + 目录结构 |
-| `hyc new <title>` / `list` / `edit` / `rename` / `move` | 文章管理 |
+| `hyc new <title>` / `list` / `edit` / `rename` / `move` | 文章管理（多集合：list 展示集合；new 写入首个集合） |
+| `hyc collections` | 从 Astro 内容集合生成 `hyacine.collections.json`（类型信息：schema + UI 字段） |
 | `hyc sync` | 全量索引上行（hash diff），返回 `ai.needs` |
 | `hyc ai:summary` / `ai:embed` / `ai:similar` | 按需跑 AI 产物 |
 | `hyc build` / `preview` / `deploy` | 博客构建/预览/部署（git push） |

@@ -401,6 +401,10 @@ export class FakeD1Database {
       } else if (lower.includes("where hash =")) {
         const [hash] = params as [string];
         rows = rows.filter((row) => row.hash === hash);
+      } else if (lower.includes("like")) {
+        // ?prefix 过滤（prefix=? OR prefix=?)：param[0]=精确前缀
+        const [prefix] = params as [string];
+        rows = rows.filter((row) => row.path === prefix || row.path.startsWith(`${prefix}/`));
       }
       return rows as unknown as T[];
     }

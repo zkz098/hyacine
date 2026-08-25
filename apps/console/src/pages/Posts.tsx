@@ -4,6 +4,15 @@ import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 
+/** repo 相对路径 → 集合目录名（src/posts → posts）；根部文件显示 — */
+function dirLabel(path: string): string {
+  const parts = path.split("/");
+  // 目录 = 去掉文件名，再去掉约定的一级 src/ 前缀
+  const dir = parts.slice(0, -1).join("/");
+  if (dir.length === 0) return "—";
+  return dir.replace(/^src\//, "") || dir;
+}
+
 export function Posts(): import("solid-js").JSX.Element {
   const [filter, setFilter] = createSignal("");
   const [posts, { refetch }] = createResource(async () => {
@@ -101,10 +110,13 @@ export function Posts(): import("solid-js").JSX.Element {
     if (list === undefined) return undefined;
     if (f.length === 0) return list;
     return list.filter(
-      (p: { title: string; slug: string }) =>
-        p.title.toLowerCase().includes(f) || p.slug.toLowerCase().includes(f),
+      (p: { title: string; slug: string; path: string }) =>
+        p.title.toLowerCase().includes(f) ||
+        p.slug.toLowerCase().includes(f) ||
+        p.path.toLowerCase().includes(f),
     );
   };
+
 
   return (
     <div class="flex flex-col gap-4">
@@ -150,6 +162,7 @@ export function Posts(): import("solid-js").JSX.Element {
                 <thead>
                   <tr class="border-b border-[var(--border)] text-left text-xs text-muted">
                     <th class="px-3 py-2">标题</th>
+                    <th class="px-3 py-2">集合</th>
                     <th class="px-3 py-2">slug</th>
                     <th class="px-3 py-2">状态</th>
                     <th class="px-3 py-2">分类</th>
@@ -176,6 +189,9 @@ export function Posts(): import("solid-js").JSX.Element {
                       <tr class="border-b border-[var(--border)] last:border-0">
                         <td class="px-3 py-2" title={post.hash}>
                           {post.title}
+                        </td>
+                        <td class="px-3 py-2">
+                          <span class="chip chip-neutral text-xs">{dirLabel(post.path)}</span>
                         </td>
                         <td class="px-3 py-2 text-muted">{post.slug}</td>
                         <td class="px-3 py-2">

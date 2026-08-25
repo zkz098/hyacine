@@ -10,7 +10,7 @@
 ## 硬约束（/grilling 已定，不得突破）
 
 - **单租户自托管**：无 tenants/users 表。
-- **文件/git 是真源，D1 是派生索引**：API 不接收、不存储正文，只存索引 + AI 产物。
+- **文件/git 是真源，D1 是派生索引**：正文（含 frontmatter）随路径存 `posts.content` 作为远程编辑/导出/AI 的载荷（P0），但索引字段仍以同步为准；内容路径 **repo 相对**（`src/posts/hello.md`，P1）。
 - **BYOK**：AI 提供商密钥是部署级环境变量，落 secret，不进 D1 明文表。
 - **Workers 只签名不碰字节**：R2 上传走 S3 SigV4 presigned URL，Worker 不中转文件字节。
 - **构建永远离线**：API 不做构建、不拉取 dist。
@@ -123,6 +123,7 @@ AI 配置探测 → health：`AI_SUMMARY_ENDPOINT && AI_SUMMARY_KEY && AI_SUMMAR
 | POST /api/assets/register        | upsert assets 行（is_remote=true, r2_key, checksum?, size?）                                                                                                                                                                                                                                                                                                                    | posts.w             |
 | GET /api/admin/config            | 当前有效配置（env 默认 + D1 app_config 覆盖），敏感项只回 `{set:boolean}` 不回明文                                                                                                                                                                                                                                                                                               | admin               |
 | PUT /api/admin/config            | 部分更新：undefined=不变、""=清除（回退 env）、非空=设置；写 D1 app_config 并失效 KV 缓存，**即时生效免 redeploy**（覆盖 aiSummary.*/embedModel/embedAutogen/github.*/r2.*）                                                                                                                                                                                                        | admin               |
+| GET /api/posts                   | 文章索引 + AI 产物状态（join ai_results）；`?prefix=<repo相对目录>` 按集合目录过滤（如 `prefix=src/moments`）                                                                                                                                                                                                                                                                | posts.r             |
 | POST /api/posts                  | 远程编辑/import：body {path, content, source?}；API 解析 frontmatter(title/slug/draft/categories)+正文 hash 落 D1（hash 变删旧 AI 产物并联动 autogen 入队）；github 配置齐全时自动触发 repository_dispatch('hyacine:export')；返回 {path,slug,title,draft,categories,hash,changed,dispatched} | posts.w            |
 | GET /api/posts/content?path=x    | 远程读取正文（urlencoded 的相对路径，支持子目录）                                                                                                                                                                                                                                                                                                                                        | posts.r             |
 | GET /api/export                  | D1 → git 全量快照：{generatedAt, posts:[{path,content}]}（只含有正文的行），供 hyacine-bridge workflow export job 拉取                                                                                                                                                                                                                                                                     | posts.r             |

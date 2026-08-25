@@ -64,18 +64,26 @@ function toListItem(row: PostJoinRow): PostListItem {
   };
 }
 
-/** 只读查询：文章索引 + AI 产物状态（console 用，posts.r） */
+/** 只读查询：文章索引 + AI 产物状态（console 用，posts.r）
+ * 支持 ?prefix=<repo-相对目录> 按集合过滤（如 prefix=src/moments）。
+ */
 export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   app.get("/api/posts", authMiddleware(["posts.r"]), async (c) => {
-    const result = await c.env.DB.prepare(
+    const prefix = (c.req.query("prefix") ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
+    let sql =
       `SELECT p.path, p.slug, p.title, p.draft, p.categories, p.hash,
               p.created_at, p.updated_at, p.last_modified,
               a.summary, a.summary_model, a.summary_at,
               a.embed_model, a.embed_at, a.embed_vec
        FROM posts p
-       LEFT JOIN ai_results a ON a.hash = p.hash
-       ORDER BY datetime(p.updated_at) DESC`,
-    ).all<PostJoinRow>();
+       LEFT JOIN ai_results a ON a.hash = p.hash`;
+    const params: string[] = [];
+    if (prefix.length > 0) {
+      sql += ` WHERE p.path = ? OR p.path LIKE ?`;
+      params.push(prefix, `${prefix}/%`);
+    }
+    sql += ` ORDER BY datetime(p.updated_at) DESC`;
+    const result = await c.env.DB.prepare(sql).bind(...params).all<PostJoinRow>();
 
     const posts = result.results.map((row) => toListItem(row));
     return c.json({ posts });

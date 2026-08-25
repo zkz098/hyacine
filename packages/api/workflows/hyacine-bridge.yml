@@ -4,13 +4,16 @@
 #   HYACINE_API_URL  —— Worker 地址，如 https://hyacine-api.<sub>.workers.dev
 #   HYACINE_TOKEN    —— 带 posts.w + posts.r 的 hyacine API token（管理台/CLI 创建）
 #
+# v2（多集合）：内容路径为 repo 相对（src/posts/hello.md、src/moments/foo.md），
+# 集合目录从 hyacine.collections.json（hyc collections 产物）读取，无硬编码。
+#
 # 两条数据流：
 #   export（D1 → git）: API 远程编辑保存后 repository_dispatch('hyacine:export')
-#                       -> 本 job 拉 /api/export 全量快照 -> 写文件 -> commit -> push
-#                       （GITHUB_TOKEN 提交不会再次触发 push workflow，天然防环；
-#                         commit 消息含 "hyacine:sync" 作为双保险过滤）
+#                       -> 本 job 拉 /api/export 全量快照 -> 按 repo 相对路径写文件
+#                       -> commit -> push（GITHUB_TOKEN 提交不会再次触发 push workflow，
+#                         且 commit 消息含 "hyacine:sync" 双保险过滤）
 #   import（git → D1）: main 分支非 hyacine 提交 push
-#                       -> 本 job 收集变更的 .md/.mdx -> POST /api/posts 上传内容
+#                       -> 本 job 收集集合目录下变更的 .md/.mdx -> POST /api/posts
 #                       -> API 解析 frontmatter/hash 落 D1（并联动自动 AI 产物）
 name: hyacine-bridge
 on:
@@ -39,13 +42,14 @@ jobs:
           curl -fsSL -H "Authorization: Bearer ${TOKEN}" "${API_URL}/api/export" -o /tmp/hyacine-export.json
           node -e '
             const fs = require("fs");
+            const path = require("path");
             const data = JSON.parse(fs.readFileSync("/tmp/hyacine-export.json", "utf8"));
-            const postsDir = "src/posts";
-            fs.mkdirSync(postsDir, { recursive: true });
             for (const post of data.posts) {
+              // repo 相对路径写入（含集合目录 src/posts/...、src/moments/...）
               if (!/^[A-Za-z0-9_\-\/\p{L}\p{N}]+\.(md|mdx)$/u.test(post.path)) continue; // path 安全
-              const full = `${postsDir}/${post.path}`;
-              fs.mkdirSync(require("path").dirname(full), { recursive: true });
+              const full = path.resolve(post.path);
+              if (!full.startsWith(process.cwd())) continue; // 防路径穿越
+              fs.mkdirSync(path.dirname(full), { recursive: true });
               fs.writeFileSync(full, post.content, "utf8");
             }
           '
@@ -77,29 +81,44 @@ jobs:
             const { execSync } = require("child_process");
             const fs = require("fs");
             const path = require("path");
+            // 集合目录：优先 hyacine.collections.json（hyc collections 产物），兜底 src/posts
+            let dirs = ["src/posts"];
+            try {
+              const manifest = JSON.parse(fs.readFileSync("hyacine.collections.json", "utf8"));
+              const extracted = (manifest.collections || [])
+                .map((c) => c.dir)
+                .filter((d) => typeof d === "string" && d.length > 0);
+              if (extracted.length > 0) dirs = extracted;
+            } catch { /* 无产物 → 默认 */ }
+            const isInDirs = (f) => dirs.some((d) => f === d || f.startsWith(d + "/"));
+            const extensionOk = /\.(md|mdx)$/.test(f);
             let files = [];
             try {
               const diff = execSync("git diff --name-only HEAD^ HEAD", { encoding: "utf8" }).trim();
-              files = diff.split("\n").filter(Boolean);
+              files = diff.split("\n").filter((f) => isInDirs(f) && extensionOk);
             } catch {
-              // 首个 commit：无 HEAD^，改为全量 posts 目录
-              files = [];
-              function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, e.name); if (e.isDirectory()) walk(p); else if (/\.(md|mdx)$/.test(e.name)) files.push(p); } }
-              if (fs.existsSync("src/posts")) walk("src/posts");
+              // 首个 commit：无 HEAD^，改为全量遍历集合目录
+              const walk = (dir) => {
+                if (!fs.existsSync(dir)) return;
+                for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+                  const p = path.join(dir, e.name);
+                  if (e.isDirectory()) walk(p);
+                  else if (extensionOk) files.push(p.replace(/\\/g, "/"));
+                }
+              };
+              for (const d of dirs) walk(d);
             }
-            const posts = files.filter((f) => f.startsWith("src/posts/") && /\.(md|mdx)$/.test(f));
-            for (const f of posts) {
-              const rel = f.slice("src/posts/".length);
+            for (const f of files) {
               const content = fs.readFileSync(f, "utf8");
-              const body = JSON.stringify({ path: rel, content, source: "git" });
+              const body = JSON.stringify({ path: f, content, source: "git" });
               const res = await fetch(`${process.env.API_URL}/api/posts`, {
                 method: "POST",
                 headers: { "content-type": "application/json", authorization: `Bearer ${process.env.TOKEN}` },
                 body,
               });
               const text = await res.text();
-              console.log(`uploaded ${rel}: ${res.status} ${text.slice(0, 120)}`);
+              console.log(`uploaded ${f}: ${res.status} ${text.slice(0, 120)}`);
               if (!res.ok) process.exit(1);
             }
-            if (posts.length === 0) console.log("no post files changed");
+            if (files.length === 0) console.log("no post files changed");
           '

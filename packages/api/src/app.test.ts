@@ -881,6 +881,50 @@ describe("posts 查询", () => {
     const response = await request(env, "GET", "/api/posts");
     expect(response.status).toBe(401);
   });
+
+  it("GET /api/posts?prefix 按集合目录过滤（repo 相对路径）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    const posts = [
+      {
+        path: "src/posts/hello.md",
+        slug: "hello",
+        title: "Hello",
+        draft: false,
+        categories: [],
+        hash: "a".repeat(16),
+        createdAt: now,
+        updatedAt: now,
+        lastModified: now,
+      },
+      {
+        path: "src/moments/beautiful-day.md",
+        slug: "beautiful-day",
+        title: "Beautiful",
+        draft: false,
+        categories: [],
+        hash: "b".repeat(16),
+        createdAt: now,
+        updatedAt: now,
+        lastModified: now,
+      },
+    ];
+    await request(env, "POST", "/api/sync", { generatedAt: now, posts, assets: [], deletedPaths: [] }, token);
+
+    const all = (await (await request(env, "GET", "/api/posts", undefined, token)).json()) as {
+      posts: Array<{ path: string }>;
+    };
+    expect(all.posts.map((p) => p.path).toSorted()).toEqual([
+      "src/moments/beautiful-day.md",
+      "src/posts/hello.md",
+    ]);
+
+    const moments = (await (
+      await request(env, "GET", "/api/posts?prefix=src%2Fmoments", undefined, token)
+    ).json()) as { posts: Array<{ path: string }> };
+    expect(moments.posts.map((p) => p.path)).toEqual(["src/moments/beautiful-day.md"]);
+  });
 });
 
 describe("assets 查询", () => {
@@ -1225,7 +1269,7 @@ describe("Primary 模式（远程编辑 / 导出）", () => {
         generatedAt: now,
         posts: [
           {
-            path: "exp.md",
+            path: "src/posts/exp.md",
             slug: "exp",
             title: "Exp",
             draft: false,
@@ -1237,7 +1281,19 @@ describe("Primary 模式（远程编辑 / 导出）", () => {
             content: "---\ntitle: Exp\n---\n\nExported body.",
           },
           {
-            path: "no-content.md",
+            path: "src/moments/beautiful-day.md",
+            slug: "beautiful-day",
+            title: "Beautiful",
+            draft: false,
+            categories: [],
+            hash: "f".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            content: "---\ndate: 2026-01-01\n---\n\nMoment body.",
+          },
+          {
+            path: "src/posts/no-content.md",
             slug: "nc",
             title: "NC",
             draft: false,
@@ -1257,11 +1313,13 @@ describe("Primary 模式（远程编辑 / 导出）", () => {
     const res = await request(env, "GET", "/api/export", undefined, token);
     expect(res.status).toBe(200);
     const json = (await res.json()) as { posts: { path: string; content: string }[] };
-    expect(json.posts).toHaveLength(1);
-    expect(json.posts[0]).toMatchObject({
-      path: "exp.md",
+    expect(json.posts).toHaveLength(2);
+    expect(json.posts).toContainEqual({
+      path: "src/posts/exp.md",
       content: expect.stringContaining("Exported body."),
-    });
+    } as { path: string; content: string });
+    // repo 相对路径透传（多集合 moments 无需目录映射）
+    expect(json.posts.map((p) => p.path)).toContain("src/moments/beautiful-day.md");
   });
 
   it("POST /api/export/trigger 调用 GitHub repository_dispatch", async () => {
