@@ -2,11 +2,13 @@ name = "hyacine-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-24"
 
-# 本地（wrangler dev --local）用占位 id；remote 部署前必须替换为真实资源 id：
-#   wrangler d1 create hyacine           -> database_id
-#   wrangler kv namespace create CACHE   -> id
-#   wrangler r2 bucket create hyacine-assets（bucket_name 已在配置）
-#   wrangler secret put SETUP_CODE / AI_SUMMARY_KEY / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY
+# 本地（wrangler dev --local）用占位 id；remote 部署前替换为真实 id，或直接用新方式：
+#   方案 A（自动预置，wrangler>=4.45）：删掉下面两处 id/bucket 名，只留 binding 名，
+#     wrangler deploy 会自动创建并回写 id；
+#   方案 B（Dashboard）：Workers & Pages -> hyacine-api -> Bindings 页可视化添加绑定。
+# 必须的 Secrets（CLI 或 Dashboard 均可）：
+#   SETUP_CODE / AI_SUMMARY_ENDPOINT / AI_SUMMARY_KEY / AI_SUMMARY_MODEL /
+#   R2_S3_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET / EMBED_MODEL
 [[d1_databases]]
 binding = "DB"
 database_name = "hyacine"

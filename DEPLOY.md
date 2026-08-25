@@ -47,9 +47,34 @@ pnpm install
 
 ## 3. Cloudflare 侧部署（API）
 
-### 3.1 创建云资源
+### 3.1 创建云资源（三选一）
 
-在 `packages/api` 目录执行（或任意外，命令带 `--config`）：
+> `wrangler.toml` 里 `database_id="local"`/`kv id="local"` 是本地占位，remote 部署前需换成真实 id（或按方案 A 直接省略）。`[ai]` 绑定已在配置内。
+
+**方案 A — 自动预置（推荐，wrangler ≥ 4.45，open beta）**
+
+把 wrangler.toml 里 D1/KV/R2 的 id/bucket 名**直接去掉**，只留 binding 名：
+
+```toml
+[[d1_databases]]
+binding = "DB"
+[[kv_namespaces]]
+binding = "CACHE"
+[[r2_buckets]]
+binding = "ASSETS"
+```
+
+然后直接 `wrangler dev`（本地自动建本地资源）和 `wrangler deploy`——云端资源会以 worker 名前缀自动创建，**id 自动回写进 wrangler.toml**（若从 GitHub/dashboard 部署，id 只存在 dashboard，不会回写仓库，用方案 B 查看）。
+
+**方案 B — Dashboard「Bindings」页（可视化，不用 wrangler）**
+
+Workers & Pages → 选择 `hyacine-api` → **Bindings** 页：
+
+- 可**添加/管理** D1（选 `hyacine` 库）、KV（`CACHE`）、R2（`hyacine-assets`）、Workers AI 等所有绑定，以及变量/Secret；
+- 可视化查看 Worker 架构图，直接从界面增删绑定；
+- 之后用 `Edit code`（dashboard 编辑器）或保持 wrangler 部署均可。
+
+**方案 C — wrangler CLI 手动（兜底/精确控制）**
 
 ```bash
 cd packages/api
@@ -66,9 +91,9 @@ wrangler kv namespace create CACHE
 wrangler r2 bucket create hyacine-assets
 ```
 
-> `wrangler.toml` 中 `database_id="local"`、`kv id="local"` 是本地占位，remote 部署前必须替换为真实 id；`[ai]` 绑定已在配置内。
+### 3.2 配置 Secrets（CLI 或 Dashboard 二选一）
 
-### 3.2 配置 Secrets
+**方式 1 — wrangler CLI**
 
 ```bash
 wrangler secret put SETUP_CODE            # 首次安装码，≥8 位强随机
@@ -79,13 +104,17 @@ wrangler secret put R2_ACCESS_KEY_ID
 wrangler secret put R2_SECRET_ACCESS_KEY
 ```
 
-非 secret 配置项可放 wrangler.toml 或 dashboard：
+非 secret 配置项也可用 `wrangler secret put`（或放 wrangler.toml）：
 
 ```bash
-wrangler secret put AI_SUMMARY_MODEL      # 如 gpt-4o-mini（也支持 Secret）
+wrangler secret put AI_SUMMARY_MODEL      # 如 gpt-4o-mini
 wrangler secret put R2_BUCKET             # hyacine-assets
 wrangler secret put EMBED_MODEL           # 默认 @cf/baai/bge-m3
 ```
+
+**方式 2 — Dashboard「Bindings」页**
+
+Worker → Bindings → Add：可添加 **Secret** 与 **Environment variable**（值同上面清单），可视化查看/编辑，改完点 Deploy 生效。适合不常跑 wrangler 的维护。
 
 > AI 摘要走 OpenAI 兼容端点（BYOK），不需要 Workers AI；**嵌入**依赖 `[ai]` 绑定（`@cf/baai/bge-m3`）。
 
@@ -112,9 +141,9 @@ curl https://<你的worker域名>/api/health
 
 ### 3.5 R2 bucket CORS（浏览器/桌面 presign 直传必需）
 
-管理台（浏览器/WebView）会拿 presigned URL **直接从浏览器 PUT 到 R2**，桶必须放行 CORS：
+管理台（浏览器/WebView）会拿 presigned URL **直接从浏览器 PUT 到 R2**，桶必须放行 CORS。可用 CLI 或 Dashboard：
 
-创建 `packages/api/cors.json`：
+**CLI**：创建 `packages/api/cors.json`：
 
 ```json
 {
@@ -130,6 +159,8 @@ curl https://<你的worker域名>/api/health
 cd packages/api
 wrangler r2 bucket cors set hyacine-assets --cors-file cors.json
 ```
+
+**Dashboard**：R2 → `hyacine-assets` → Settings → CORS，按同样规则填写即可。
 
 > presigned URL 已把 `content-type` 纳入签名，客户端上传必须带匹配的 Content-Type。
 
