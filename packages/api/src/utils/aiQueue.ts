@@ -180,6 +180,69 @@ export async function generateSummaryByok(
   throw new Error("AI 返回空摘要");
 }
 
+/**
+ * 从 Workers AI / AI Gateway 绑定返回里提取纯文本。
+ * 兼容文本生成模型 `{ response }`、Responses API `{ output_text }`、
+ * OpenAI 兼容 `{ choices[].message.content }`，以及多模态部分数组（string 或 [{text}]）。
+ * 若返回 payload 本身是错误对象（{error}/{errors}）则抛出带详情的错误而非“空摘要”。
+ */
+export function extractWorkersAiText(result: unknown): string {
+  if (result === null || typeof result !== "object") return "";
+  let obj = result as Record<string, unknown>;
+
+  // 错误 payload：绑定失败时常以 {error} / {errors:[{message}]} 返回而非抛错
+  const errMsg = (
+    obj.error &&
+    (typeof obj.error === "string"
+      ? obj.error
+      : (obj.error as { message?: unknown })?.message)
+  ) ||
+    (Array.isArray(obj.errors) &&
+      obj.errors.length > 0 &&
+      (obj.errors[0] as { message?: unknown })?.message);
+  if (typeof errMsg === "string" && errMsg.length > 0) {
+    throw new Error(`Workers AI 调用失败: ${errMsg}`);
+  }
+
+  // REST /ai/run 信封 `{ success, errors, result: {...} }`：绑定已 unwrap，但若路由经 REST
+  // 返回，真正的模型输出藏在 `result` 下，需要解包一层再提取。
+  const wrapped = obj.result;
+  if (wrapped !== null && typeof wrapped === "object" && !Array.isArray(wrapped)) {
+    const w = wrapped as Record<string, unknown>;
+    if ("response" in w || "output_text" in w || "outputText" in w || "choices" in w) {
+      obj = w;
+    }
+  }
+
+  const collectText = (v: unknown): string[] => {
+    const out: string[] = [];
+    if (typeof v === "string") out.push(v);
+    else if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === "string") out.push(item);
+        else if (item !== null && typeof item === "object") {
+          const t = (item as { text?: unknown }).text;
+          if (typeof t === "string") out.push(t);
+        }
+      }
+    }
+    return out;
+  };
+
+  const parts: string[] = [];
+  parts.push(...collectText(obj.response));
+  parts.push(...collectText(obj.output_text));
+  parts.push(...collectText(obj.outputText));
+  const choice = (obj.choices as { message?: { content?: unknown } }[] | undefined)?.[0];
+  if (choice?.message !== undefined) parts.push(...collectText(choice.message.content));
+
+  return parts
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ");
+}
+
 export async function generateSummaryWorkersAi(
   env: Env,
   model: string,
@@ -196,15 +259,14 @@ export async function generateSummaryWorkersAi(
     ],
     max_tokens: 200,
   })) as unknown;
-  const text =
-    typeof result === "object" && result !== null
-      ? ((result as { response?: unknown }).response ??
-        (result as { output_text?: unknown }).output_text ??
-        (result as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message
-          ?.content)
-      : undefined;
-  const summary = typeof text === "string" ? text.trim().replace(/\s+/g, " ") : "";
-  if (summary.length === 0) throw new Error("Workers AI 返回空摘要");
+  const summary = extractWorkersAiText(result);
+  if (summary.length === 0) {
+    const keys =
+      result !== null && typeof result === "object"
+        ? Object.keys(result).join(",")
+        : String(result);
+    throw new Error(`Workers AI 返回空摘要（未识别的返回结构: ${keys}）`);
+  }
   return summary;
 }
 

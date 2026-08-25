@@ -4,6 +4,7 @@ import { createTestEnv, getFakeD1 } from "../test-helpers";
 import {
   classifyAiError,
   enqueueAiNeeds,
+  extractWorkersAiText,
   nextQuotaRetryAt,
   processAiQueue,
   type AiNeed,
@@ -65,6 +66,54 @@ describe("enqueueAiNeeds", () => {
     const row = db.aiQueue.get("a".repeat(16));
     expect(row?.kind).toBe("both");
     expect(row?.status).toBe("pending");
+  });
+});
+
+describe("extractWorkersAiText", () => {
+  it("文本生成模型 {response} → 提取", () => {
+    expect(extractWorkersAiText({ response: "  一句话 摘要  " })).toBe("一句话 摘要");
+  });
+  it("Responses API {output_text} / {outputText} → 提取", () => {
+    expect(extractWorkersAiText({ output_text: "a\nb" })).toBe("a b");
+    expect(extractWorkersAiText({ outputText: "c" })).toBe("c");
+  });
+  it("OpenAI 兼容 {choices[].message.content} → 提取", () => {
+    expect(
+      extractWorkersAiText({ choices: [{ message: { content: "摘要内容" } }] }),
+    ).toBe("摘要内容");
+  });
+  it("多模态部分数组（string 或 [{text}]）→ 拼接提取", () => {
+    expect(extractWorkersAiText({ response: ["第一段", { text: "第二段" }] })).toBe(
+      "第一段 第二段",
+    );
+    expect(
+      extractWorkersAiText({ choices: [{ message: { content: [{ text: "A" }, "B"] } }] }),
+    ).toBe("A B");
+  });
+  it("error / errors payload → 抛出带详情的错误（而非空摘要）", () => {
+    expect(() => extractWorkersAiText({ error: { message: "model not found" } })).toThrow(
+      /Workers AI 调用失败: model not found/,
+    );
+    expect(() => extractWorkersAiText({ errors: [{ message: "oops" }] })).toThrow(
+      /Workers AI 调用失败: oops/,
+    );
+  });
+  it("REST /ai/run 信封 {result:{...}} → 解包提取（response/choices）", () => {
+    expect(extractWorkersAiText({ success: true, errors: [], result: { response: "信封摘要" } })).toBe(
+      "信封摘要",
+    );
+    expect(
+      extractWorkersAiText({
+        success: true,
+        errors: [],
+        result: { choices: [{ message: { content: "信封choices" } }] },
+      }),
+    ).toBe("信封choices");
+  });
+  it("无任何已知字段 → 返回空串（由调用方报空摘要）", () => {
+    expect(extractWorkersAiText({ foo: "bar" })).toBe("");
+    expect(extractWorkersAiText({ success: true, result: null })).toBe("");
+    expect(extractWorkersAiText(null)).toBe("");
   });
 });
 
