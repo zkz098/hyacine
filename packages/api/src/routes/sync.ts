@@ -19,14 +19,15 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     const input = parsed.data;
 
-    // Load existing posts
-    const existingResult = await c.env.DB.prepare("SELECT path, hash FROM posts").all<{
+    // Load existing posts（带 content：判断「hash 未变但正文缺失」的老数据补 content）
+    const existingResult = await c.env.DB.prepare("SELECT path, hash, content FROM posts").all<{
       path: string;
       hash: string;
+      content: string | null;
     }>();
-    const existingMap = new Map<string, string>();
+    const existingMap = new Map<string, { hash: string; content: string | null }>();
     for (const row of existingResult.results ?? []) {
-      existingMap.set(row.path, row.hash);
+      existingMap.set(row.path, { hash: row.hash, content: row.content });
     }
 
     const changedHashes: string[] = [];
@@ -37,8 +38,8 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     for (const post of input.posts) {
       inputPaths.add(post.path);
-      const existingHash = existingMap.get(post.path);
-      if (existingHash === undefined || existingHash !== post.hash) {
+      const existing = existingMap.get(post.path);
+      if (existing === undefined || existing.hash !== post.hash) {
         changedHashes.push(post.hash);
         const content = post.content ?? null;
         await c.env.DB.prepare(
@@ -59,6 +60,13 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
           .run();
         if (post.content !== undefined) contentByHash.set(post.hash, post.content);
       } else {
+        // hash 未变：老数据（content 缺失）本次补上，避免「远程 404 / 导出缺行 / AI 无法生成」
+        if (existing.content === null && post.content !== undefined) {
+          await c.env.DB.prepare("UPDATE posts SET content = ?, updated_at = ? WHERE path = ?")
+            .bind(post.content, post.updatedAt, post.path)
+            .run();
+          contentByHash.set(post.hash, post.content);
+        }
         unchangedHashes.push(post.hash);
       }
     }
@@ -73,12 +81,12 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     // 仅当没有任何保留文章引用该 hash 时才清 ai_results，避免两篇同内容
     // (同 hash) 文章因删一篇而被误删另一篇的 AI 产物
     const keptHashes = new Set<string>();
-    for (const [path, hash] of existingMap) {
-      if (!deletedPaths.includes(path)) keptHashes.add(hash);
+    for (const [path, row] of existingMap) {
+      if (!deletedPaths.includes(path)) keptHashes.add(row.hash);
     }
     for (const deleted of deletedPaths) {
       await c.env.DB.prepare("DELETE FROM posts WHERE path = ?").bind(deleted).run();
-      const hash = existingMap.get(deleted);
+      const hash = existingMap.get(deleted)?.hash;
       if (hash !== undefined && !keptHashes.has(hash)) {
         await c.env.DB.prepare("DELETE FROM ai_results WHERE hash = ?").bind(hash).run();
       }

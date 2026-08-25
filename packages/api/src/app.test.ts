@@ -445,6 +445,69 @@ describe("sync", () => {
     expect(db.posts.get("content.md")?.content).toBe(body);
   });
 
+  it("老数据 content 缺失时，同 hash 再上行会补上正文（修复远程 404/导出缺行）", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    const hash = "f".repeat(16);
+    // 第一轮：老客户端旧版，无 content 字段
+    await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "legacy.md",
+            slug: "legacy",
+            title: "Legacy",
+            draft: false,
+            categories: [],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    const db = getFakeD1(env);
+    expect(db.posts.get("legacy.md")?.content).toBeNull();
+
+    // 第二轮：同 hash（文章内容没变）但带 content → 应补上（此前 bug：不补，永远 null）
+    const again = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "legacy.md",
+            slug: "legacy",
+            title: "Legacy",
+            draft: false,
+            categories: [],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+            content: "---\ntitle: Legacy\n---\n\nLegacy body filled.",
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(again.status).toBe(200);
+    expect(db.posts.get("legacy.md")?.content).toContain("Legacy body filled.");
+  });
+
   it("autogen 开启时同步自动入队（P1）", async () => {
     const env = createTestEnv();
     const token = await setupAdminToken(env);

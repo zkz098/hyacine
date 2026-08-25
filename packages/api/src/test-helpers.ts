@@ -178,6 +178,16 @@ export class FakeD1Database {
       return;
     }
 
+    if (lower.startsWith("update posts set content")) {
+      const [content, updatedAt, path] = params as [string, string, string];
+      const row = this.posts.get(path);
+      if (row !== undefined) {
+        row.content = content;
+        row.updated_at = updatedAt;
+      }
+      return;
+    }
+
     if (lower.startsWith("insert into ai_results")) {
       // Extract columns
       const columnsMatch = sql.match(/\(([^)]+)\)\s+values/i);
