@@ -114,6 +114,7 @@ export function Workspace(): import("solid-js").JSX.Element {
               <thead>
                 <tr class="border-b border-[var(--border)] text-left text-xs text-muted">
                   <th class="px-3 py-2">标题</th>
+                  <th class="px-3 py-2">集合</th>
                   <th class="px-3 py-2">slug</th>
                   <th class="px-3 py-2">状态</th>
                   <th class="px-3 py-2">摘要</th>
@@ -125,6 +126,9 @@ export function Workspace(): import("solid-js").JSX.Element {
                   {(post) => (
                     <tr class="border-b border-[var(--border)] last:border-0">
                       <td class="px-3 py-2">{post.title}</td>
+                      <td class="px-3 py-2">
+                        <span class="chip chip-neutral text-xs">{post.collection}</span>
+                      </td>
                       <td class="px-3 py-2 text-muted text-xs">{post.slug}</td>
                       <td class="px-3 py-2">
                         {post.draft ? (

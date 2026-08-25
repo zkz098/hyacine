@@ -1,5 +1,5 @@
 // oxlint-disable typescript/no-unsafe-type-assertion, typescript/no-unnecessary-type-assertion, eslint/no-unused-vars
-import { createEffect, createResource, createSignal, onMount, Show } from "solid-js";
+import { createEffect, createResource, createSignal, onMount, Show, For } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { parse as yamlParse } from "yaml";
 import { t } from "../i18n";
@@ -7,6 +7,8 @@ import { isTauri, readTextFile, writeTextFile } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import { parseFrontmatter, materializeSummary } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
+import { getCollections, type Collection, type CollectionFieldUi } from "@hyacine/contract";
+import { validateFrontmatter, coerceFieldValue } from "../lib/collectionValidate";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
@@ -130,10 +132,51 @@ export function Editor(): import("solid-js").JSX.Element {
 
   const fullPath = (): string | null => {
     const dir = projectStore.projectDir();
-    const cfg = projectStore.projectConfig();
     const p = path();
-    if (dir === null || cfg === null || p.length === 0) return null;
-    return `${dir}/${cfg.contentDir}/${p}`;
+    // path 为 repo 相对（src/posts/hello.md、src/moments/foo.md）
+    if (dir === null || p.length === 0) return null;
+    return `${dir}/${p}`;
+  };
+
+  /** 当前文章的集合（由 path 前缀匹配集合注册表；无产物时回退 null） */
+  const currentCollection = (): Collection | null => {
+    const cfg = projectStore.projectConfig();
+    const cf = projectStore.collectionsFile();
+    const p = path();
+    if (cfg === null || cf === null || p.length === 0) return null;
+    const spec = getCollections(cfg).find((s) => p === s.dir || p.startsWith(`${s.dir}/`));
+    const name = spec?.name ?? "posts";
+    return cf.collections.find((c) => c.name === name) ?? null;
+  };
+
+  /** 表单硬编码字段之外的集合字段（schema 驱动渲染） */
+  const CORE_FIELDS = new Set(["title", "slug", "categories", "tags", "draft", "date"]);
+  const extraFields = (): CollectionFieldUi[] => {
+    const c = currentCollection();
+    if (c === null) return [];
+    return c.ui.fields.filter(
+      (f) =>
+        !CORE_FIELDS.has(f.key) &&
+        (f.kind === "string" ||
+          f.kind === "date" ||
+          f.kind === "boolean" ||
+          f.kind === "enum" ||
+          f.kind === "string[]"),
+    );
+  };
+  /** 扩展字段表单值（字符串形态；boolean 用 "true"/"false"） */
+  const [extras, setExtras] = createSignal<Record<string, string>>({});
+
+  const seedExtras = (data: Record<string, unknown>): void => {
+    const next: Record<string, string> = {};
+    for (const f of extraFields()) {
+      const v = data[f.key];
+      if (v === undefined || v === null) continue;
+      if (f.kind === "boolean") next[f.key] = v === true ? "true" : "false";
+      else if (Array.isArray(v)) next[f.key] = v.join(", ");
+      else next[f.key] = String(v);
+    }
+    setExtras(next);
   };
 
   const load = async (): Promise<void> => {
@@ -340,12 +383,85 @@ export function Editor(): import("solid-js").JSX.Element {
           else setTags("");
           setDraft(f.draft === true);
           setDate(typeof f.date === "string" ? f.date : "");
+          seedExtras(f);
         }
       } catch {
         // raw 非法时保持原样，不覆盖表单
       }
       setFmMode("form");
     }
+  };
+
+  /** 扩展字段渲染（按 kind，来自集合 schema） */
+  const renderExtraField = (f: CollectionFieldUi): import("solid-js").JSX.Element => {
+    const value = (): string => extras()[f.key] ?? "";
+    const set = (v: string): void => {
+      setExtras({ ...extras(), [f.key]: v });
+      setDirty(true);
+    };
+    const label = (): string => `${f.key}${f.required ? " *" : ""}`;
+    if (f.kind === "enum") {
+      return (
+        <label class="flex flex-col gap-1 text-sm">
+          <span>{label()}</span>
+          <select
+            value={value()}
+            onChange={(e) => set(e.currentTarget.value)}
+            class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+          >
+            <option value="">—</option>
+            {(f.values ?? []).map((v) => (
+              <option value={v}>{v}</option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+    if (f.kind === "boolean") {
+      return (
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={value() === "true"}
+            onChange={(e) => set(e.currentTarget.checked ? "true" : "")}
+          />
+          <span>{f.key}</span>
+        </label>
+      );
+    }
+    if (f.kind === "string[]") {
+      return (
+        <label class="flex flex-col gap-1 text-sm">
+          <span>{label()}（逗号分隔）</span>
+          <input
+            value={value()}
+            onInput={(e) => set(e.currentTarget.value)}
+            placeholder={f.image === true ? "图片路径列表" : ""}
+            class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+          />
+        </label>
+      );
+    }
+    return (
+      <label class="flex flex-col gap-1 text-sm">
+        <span>{label()}</span>
+        <input
+          type={f.secret === true ? "password" : "text"}
+          value={value()}
+          onInput={(e) => set(e.currentTarget.value)}
+          placeholder={
+            f.secret === true
+              ? "（不回显）"
+              : f.image === true
+                ? "图片路径（src/assets/...）"
+                : f.kind === "date"
+                  ? "YYYY-MM-DD"
+                  : ""
+          }
+          class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
+        />
+      </label>
+    );
   };
 
   const handleAiSummary = async (): Promise<void> => {
@@ -601,6 +717,12 @@ export function Editor(): import("solid-js").JSX.Element {
                   class="px-2 py-1.5 rounded border border-[var(--border)] bg-[var(--bg)] text-sm"
                 />
               </label>
+              <Show when={extraFields().length > 0 && fmMode() === "form"}>
+                <div class="border-t border-[var(--border)] pt-3 mt-1 flex flex-col gap-2">
+                  <p class="text-xs text-muted">扩展字段（来自 Astro 集合 schema）</p>
+                  <For each={extraFields()}>{(f) => renderExtraField(f)}</For>
+                </div>
+              </Show>
             </Show>
           </div>
 

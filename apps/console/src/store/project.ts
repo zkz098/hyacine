@@ -5,6 +5,7 @@ import {
   getCollections,
   parseCollectionsFile,
   parseProjectConfig,
+  type CollectionsFile,
   type ProjectConfig,
 } from "@hyacine/contract";
 import { displaySlug } from "@hyacine/contract";
@@ -30,6 +31,8 @@ export interface LocalPostInfo {
 
 const [projectDir, setProjectDir] = createSignal<string | null>(null);
 const [projectConfig, setProjectConfig] = createSignal<ProjectConfig | null>(null);
+/** hyc collections 产物（集合 schema + ui 字段描述；可为 null=未生成） */
+const [collectionsFile, setCollectionsFile] = createSignal<CollectionsFile | null>(null);
 const [posts, setPosts] = createSignal<LocalPostInfo[]>([]);
 const [loading, setLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
@@ -67,6 +70,17 @@ async function loadConfig(dir: string): Promise<ProjectConfig> {
   }
   return config;
 }
+
+/** 读取 hyacine.collections.json（schema + ui 字段描述），失败/缺失返回 null */
+async function loadCollectionsFile(dir: string): Promise<CollectionsFile | null> {
+  try {
+    const gen = await readTextFile(`${dir}/hyacine.collections.json`);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- JSON.parse any
+    return parseCollectionsFile(JSON.parse(gen) as unknown);
+  } catch {
+    return null;
+  }
+}
 function extractTitle(data: Record<string, unknown>, fallback: string): string {
   const t = data.title;
   if (typeof t === "string" && t.length > 0) return t;
@@ -82,8 +96,9 @@ export async function openProject(dir: string): Promise<void> {
   if (!isTauri()) throw new Error("require_tauri");
   setProjectDir(dir);
   setError(null);
-  const cfg = await loadConfig(dir);
+  const [cfg, collections] = await Promise.all([loadConfig(dir), loadCollectionsFile(dir)]);
   setProjectConfig(cfg);
+  setCollectionsFile(collections);
   await refreshPosts();
 }
 
@@ -172,6 +187,7 @@ export function useProject() {
   return {
     projectDir,
     projectConfig,
+    collectionsFile,
     posts,
     loading,
     error,
@@ -184,6 +200,7 @@ export function useProject() {
 export const projectStore = {
   projectDir,
   projectConfig,
+  collectionsFile,
   posts,
   loading,
   error,
