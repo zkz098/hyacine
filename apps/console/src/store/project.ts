@@ -82,6 +82,7 @@ export async function refreshPosts(): Promise<void> {
     const files = await readDirRecursive(contentAbs);
     const mdFiles = files.filter((f) => f.endsWith(".md") || f.endsWith(".mdx"));
     const infos: LocalPostInfo[] = [];
+    const fileErrors: string[] = [];
     for (const full of mdFiles) {
       try {
         const raw = await readTextFile(full);
@@ -109,13 +110,22 @@ export async function refreshPosts(): Promise<void> {
           summaryPresent,
           updatedAt: "",
         });
-      } catch {
-        // skip broken file
+      } catch (e: unknown) {
+        // 收集真实失败原因，避免“静默空列表”掩盖问题
+        const reason = e instanceof Error ? e.message : String(e);
+        if (fileErrors.length < 3) fileErrors.push(`${full}: ${reason}`);
       }
     }
     // 按 path 排序
     infos.sort((a, b) => a.path.localeCompare(b.path));
     setPosts(infos);
+    if (infos.length > 0) {
+      setError(null);
+    } else if (mdFiles.length === 0) {
+      setError(`在 ${contentAbs} 下未发现任何 .md/.mdx 文件（readDir 返回 ${files.length} 项）`);
+    } else if (fileErrors.length > 0) {
+      setError(`扫描到 ${mdFiles.length} 个文件但读取全部失败，前几个错误：${fileErrors.join(" | ")}`);
+    }
   } catch (err: unknown) {
     setError(err instanceof Error ? err.message : String(err));
   } finally {

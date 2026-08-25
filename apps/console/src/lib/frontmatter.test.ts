@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { hasUpToDateSummary, materializeSummary, parseFrontmatter } from "./frontmatter";
+import { installBufferPolyfill } from "./buffer";
 
 describe("frontmatter core schema", () => {
+  it("渲染进程无全局 Buffer 时仍能解析（回归：gray-matter Buffer is not defined）", () => {
+    // 模拟浏览器/WebView：先删掉全局 Buffer，再装 polyfill
+    const g = globalThis as unknown as { Buffer?: unknown };
+    const had = g.Buffer;
+    delete g.Buffer;
+    try {
+      installBufferPolyfill();
+      const raw = `---\ntitle: T\ncategories: [a, b]\n---\n\nBody\n`;
+      const parsed = parseFrontmatter(raw);
+      expect(parsed.data.title).toBe("T");
+      expect(parsed.content).toContain("Body");
+    } finally {
+      g.Buffer = had;
+    }
+  });
+
   it("date 字符串不被重写为 ISO 时间戳", () => {
     const raw = `---\ntitle: T\ndate: 2026-08-01\n---\n\nX\n`;
     const out = materializeSummary(raw, "s", "m", "a".repeat(16), "2026-01-01T00:00:00.000Z");
