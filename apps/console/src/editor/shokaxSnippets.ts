@@ -47,7 +47,8 @@ export const SHOKAX_SNIPPETS: ShokaxSnippet[] = [
     id: "tabs",
     label: "页签",
     icon: "i-ri-tab-line",
-    build: () => `\n\n<Tabs>\n  <Tab label="标签一">${P}</Tab>\n  <Tab label="标签二">${P}</Tab>\n</Tabs>\n\n`,
+    build: () =>
+      `\n\n<Tabs>\n  <Tab label="标签一">${P}</Tab>\n  <Tab label="标签二">${P}</Tab>\n</Tabs>\n\n`,
   },
   {
     id: "collapse",

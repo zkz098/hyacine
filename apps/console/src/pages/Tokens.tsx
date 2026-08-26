@@ -228,10 +228,18 @@ export function Tokens(): import("solid-js").JSX.Element {
                     }`}
                   >
                     <div class="flex items-center justify-between">
-                      <span class={`font-mono text-xs font-semibold ${selected() ? "text-[var(--accent)]" : "text-[var(--text)]"}`}>
+                      <span
+                        class={`font-mono text-xs font-semibold ${selected() ? "text-[var(--accent)]" : "text-[var(--text)]"}`}
+                      >
                         {s.label}
                       </span>
-                      <span class={selected() ? "i-ri-checkbox-circle-fill text-[var(--accent)] text-sm" : "i-ri-checkbox-blank-circle-line text-[var(--muted)] text-sm"} />
+                      <span
+                        class={
+                          selected()
+                            ? "i-ri-checkbox-circle-fill text-[var(--accent)] text-sm"
+                            : "i-ri-checkbox-blank-circle-line text-[var(--muted)] text-sm"
+                        }
+                      />
                     </div>
                     <span class="text-[11px] text-[var(--muted)]">{s.desc}</span>
                   </button>
@@ -313,7 +321,9 @@ export function Tokens(): import("solid-js").JSX.Element {
 
                           <TableCell>
                             <span class="text-xs text-[var(--muted)] font-mono">
-                              {tok.expiresAt ? new Date(tok.expiresAt).toLocaleDateString() : "永久有效"}
+                              {tok.expiresAt
+                                ? new Date(tok.expiresAt).toLocaleDateString()
+                                : "永久有效"}
                             </span>
                           </TableCell>
 

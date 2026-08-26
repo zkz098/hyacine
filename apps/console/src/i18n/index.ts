@@ -40,7 +40,8 @@ const zhCN: Record<string, string> = {
   "posts.viewTitle": "文章正文 (只读)",
   "posts.editDisabled": "Replica 模式不可用：需在设置配置 GitHub 桥（Primary）",
   "posts.replicaReadOnlyTooltip": "Replica 模式：正文仅供只读查看，无法在云端直接保存",
-  "posts.replicaReadOnlyNotice": "当前环境未配置 GitHub 桥接（Replica 模式）。云端仅作为只读副本展示，禁止直接在线修改保存。如需修改文章内容，请在本地工作台编辑后同步至云端。",
+  "posts.replicaReadOnlyNotice":
+    "当前环境未配置 GitHub 桥接（Replica 模式）。云端仅作为只读副本展示，禁止直接在线修改保存。如需修改文章内容，请在本地工作台编辑后同步至云端。",
   "posts.editSave": "保存并触发导出",
   "posts.editing": "保存中...",
   "posts.ai.generate": "生成 AI",
@@ -119,7 +120,8 @@ const zhCN: Record<string, string> = {
   "posts.delete": "删除",
   "posts.batchDelete": "批量删除",
   "posts.deleteConfirmTitle": "确认从云端删除文章",
-  "posts.deleteConfirmMsg": "确定要从云端 D1 数据库删除以下 {count} 篇文章吗？文章将被标记为软删除并从线上立即下架（保留 30 天回收期）。",
+  "posts.deleteConfirmMsg":
+    "确定要从云端 D1 数据库删除以下 {count} 篇文章吗？文章将被标记为软删除并从线上立即下架（保留 30 天回收期）。",
   "workspace.title": "工作台",
   "workspace.open": "选择博客目录",
   "workspace.requireTauri": "此功能仅桌面模式可用",
@@ -133,7 +135,8 @@ const zhCN: Record<string, string> = {
   "workspace.selectedCount": "已选择 {count} 篇",
   "workspace.clearSelection": "取消选择",
   "workspace.deleteConfirmTitle": "确认删除本地文章",
-  "workspace.deleteConfirmMsg": "确定要从本地博客目录永久删除以下 {count} 个文章文件吗？此操作不可撤销（若后续执行同步到云端，云端相应索引也将下架）。",
+  "workspace.deleteConfirmMsg":
+    "确定要从本地博客目录永久删除以下 {count} 个文章文件吗？此操作不可撤销（若后续执行同步到云端，云端相应索引也将下架）。",
   "editor.title": "编辑",
   "editor.frontmatter": "Frontmatter",
   "editor.save": "保存",

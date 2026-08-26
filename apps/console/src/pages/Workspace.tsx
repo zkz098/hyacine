@@ -242,7 +242,8 @@ export function Workspace(): import("solid-js").JSX.Element {
                 <div class="flex flex-col gap-0.5">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-semibold text-sm text-[var(--text)]">
-                      {projectStore.projectDir()?.replace(/\\/g, "/").split("/").pop() || "Astro ShokaX Blog"}
+                      {projectStore.projectDir()?.replace(/\\/g, "/").split("/").pop() ||
+                        "Astro ShokaX Blog"}
                     </span>
                     <Badge variant="primary" size="sm">
                       {projectStore.posts().length} 篇文章

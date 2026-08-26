@@ -39,10 +39,7 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
         // 强制重绑需要 admin 权限
         const scopes = c.get("scopes") ?? [];
         if (!scopes.includes("admin")) {
-          return c.json(
-            errorBody("forbidden", "强制重绑项目身份需要 admin 权限令牌"),
-            403,
-          );
+          return c.json(errorBody("forbidden", "强制重绑项目身份需要 admin 权限令牌"), 403);
         }
         // 记录新绑定
         await c.env.DB.prepare(
@@ -63,7 +60,9 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
 
     // Load existing active posts (排除已软删除)
-    const existingResult = await c.env.DB.prepare("SELECT path, hash, content FROM posts WHERE deleted_at IS NULL").all<{
+    const existingResult = await c.env.DB.prepare(
+      "SELECT path, hash, content FROM posts WHERE deleted_at IS NULL",
+    ).all<{
       path: string;
       hash: string;
       content: string | null;

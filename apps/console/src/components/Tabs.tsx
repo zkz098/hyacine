@@ -17,7 +17,9 @@ export interface TabsProps {
 
 export function Tabs(props: TabsProps): JSX.Element {
   return (
-    <div class={`flex items-center gap-1 border-b border-[var(--border)] overflow-x-auto ${props.class ?? ""}`}>
+    <div
+      class={`flex items-center gap-1 border-b border-[var(--border)] overflow-x-auto ${props.class ?? ""}`}
+    >
       <For each={props.items}>
         {(tab) => {
           const isActive = (): boolean => props.activeKey === tab.key;

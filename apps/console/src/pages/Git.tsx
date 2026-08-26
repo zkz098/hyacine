@@ -44,9 +44,7 @@ function parsePorcelain(output: string): Array<{ status: string; path: string }>
     });
 }
 
-function statusBadgeVariant(
-  status: string,
-): "success" | "warning" | "danger" | "info" | "neutral" {
+function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
   if (status === "新增") return "success";
   if (status === "修改") return "warning";
   if (status === "删除") return "danger";

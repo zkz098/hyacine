@@ -67,7 +67,9 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
             </div>
             <div class="flex flex-col">
               <span class="font-bold leading-tight">hyacine</span>
-              <span class="text-[10px] text-[var(--muted)] font-mono font-normal">Astro ShokaX Studio</span>
+              <span class="text-[10px] text-[var(--muted)] font-mono font-normal">
+                Astro ShokaX Studio
+              </span>
             </div>
           </div>
           <Badge size="sm" variant={isTauri() ? "primary" : "neutral"}>
@@ -84,12 +86,17 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
                 云端管理
               </span>
               <Show when={apiStore.isAuthed()}>
-                <span class="w-2 h-2 rounded-full bg-[var(--ok)] ring-2 ring-[var(--ok)]/20" title="已连接云端" />
+                <span
+                  class="w-2 h-2 rounded-full bg-[var(--ok)] ring-2 ring-[var(--ok)]/20"
+                  title="已连接云端"
+                />
               </Show>
             </div>
             {cloudNavItems.map((item) => {
               const isSelected = (): boolean =>
-                item.href === "/" ? location.pathname === "/" : location.pathname.startsWith(item.href);
+                item.href === "/"
+                  ? location.pathname === "/"
+                  : location.pathname.startsWith(item.href);
               return (
                 <A
                   href={item.href}
@@ -116,7 +123,10 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
                   本地工作区
                 </span>
                 <Show when={projectStore.projectDir() !== null}>
-                  <span class="text-[10px] text-[var(--muted)] truncate max-w-[80px]" title={projectStore.projectDir() ?? ""}>
+                  <span
+                    class="text-[10px] text-[var(--muted)] truncate max-w-[80px]"
+                    title={projectStore.projectDir() ?? ""}
+                  >
                     {currentProjectName()}
                   </span>
                 </Show>
@@ -177,11 +187,7 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
                 }`}
               />
               <span class="text-xs text-[var(--muted)] truncate">
-                {apiStore.isAuthed()
-                  ? "API 已连接"
-                  : isTauri()
-                    ? "本地离线"
-                    : "未连接"}
+                {apiStore.isAuthed() ? "API 已连接" : isTauri() ? "本地离线" : "未连接"}
               </span>
             </div>
             <button
@@ -191,7 +197,13 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
               title="切换明暗主题"
               aria-label="Toggle Theme"
             >
-              <span class={apiStore.state.theme === "dark" ? "i-ri-sun-line text-sm" : "i-ri-moon-line text-sm"} />
+              <span
+                class={
+                  apiStore.state.theme === "dark"
+                    ? "i-ri-sun-line text-sm"
+                    : "i-ri-moon-line text-sm"
+                }
+              />
             </button>
           </div>
           <button
@@ -230,7 +242,9 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
             <Show when={isTauri() && projectStore.projectDir() !== null}>
               <div class="hidden sm:flex items-center gap-1.5 text-xs text-[var(--muted)] bg-[var(--bg)] border border-[var(--border)] px-2.5 py-1 rounded-[4px]">
                 <span class="i-ri-folder-3-line text-[var(--accent)]" />
-                <span class="font-mono text-[11px] truncate max-w-xs">{projectStore.projectDir()}</span>
+                <span class="font-mono text-[11px] truncate max-w-xs">
+                  {projectStore.projectDir()}
+                </span>
               </div>
             </Show>
           </div>
@@ -252,7 +266,13 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
               class="w-8 h-8 rounded-md hover:bg-[var(--g-2)] flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
               aria-label="toggle theme"
             >
-              <span class={apiStore.state.theme === "dark" ? "i-ri-sun-line text-base" : "i-ri-moon-line text-base"} />
+              <span
+                class={
+                  apiStore.state.theme === "dark"
+                    ? "i-ri-sun-line text-base"
+                    : "i-ri-moon-line text-base"
+                }
+              />
             </button>
           </div>
         </header>

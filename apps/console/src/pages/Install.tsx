@@ -256,11 +256,15 @@ export function Install(): import("solid-js").JSX.Element {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div class="p-2.5 rounded-[4px] bg-[var(--g-1)] border border-[var(--border)] flex items-center justify-between">
             <span class="text-[var(--muted)]">Git：</span>
-            <span class="font-mono font-medium">{deps().git === null ? "未检测到 / 缺失" : deps().git}</span>
+            <span class="font-mono font-medium">
+              {deps().git === null ? "未检测到 / 缺失" : deps().git}
+            </span>
           </div>
           <div class="p-2.5 rounded-[4px] bg-[var(--g-1)] border border-[var(--border)] flex items-center justify-between">
             <span class="text-[var(--muted)]">pnpm：</span>
-            <span class="font-mono font-medium">{deps().pnpm === null ? "未检测到 (可跳过)" : deps().pnpm}</span>
+            <span class="font-mono font-medium">
+              {deps().pnpm === null ? "未检测到 (可跳过)" : deps().pnpm}
+            </span>
           </div>
         </div>
 
@@ -291,17 +295,16 @@ export function Install(): import("solid-js").JSX.Element {
         </Show>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input
-            label="仓库地址"
-            value={repo()}
-            onInput={(e) => setRepo(e.currentTarget.value)}
-          />
+          <Input label="仓库地址" value={repo()} onInput={(e) => setRepo(e.currentTarget.value)} />
 
           <Select
             label="克隆加速源"
             value={source()}
             onChange={(e) => setSource(e.currentTarget.value as CloneSource)}
-            options={CLONE_SOURCES.map((s) => ({ label: `${s.label} — ${s.description}`, value: s.key }))}
+            options={CLONE_SOURCES.map((s) => ({
+              label: `${s.label} — ${s.description}`,
+              value: s.key,
+            }))}
           />
         </div>
 
@@ -361,12 +364,7 @@ export function Install(): import("solid-js").JSX.Element {
             >
               开始执行 pnpm install
             </Button>
-            <Button
-              variant="outline"
-              size="md"
-              disabled={busy()}
-              onClick={skipInstall}
-            >
+            <Button variant="outline" size="md" disabled={busy()} onClick={skipInstall}>
               跳过依赖安装
             </Button>
           </div>

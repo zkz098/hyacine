@@ -245,8 +245,8 @@ export function Posts(): import("solid-js").JSX.Element {
       // 状态过滤
       if (st === "published" && p.draft) return false;
       if (st === "draft" && !p.draft) return false;
-      if (st === "has_ai" && (!p.ai.summary.present && !p.ai.embed.present)) return false;
-      if (st === "no_ai" && (p.ai.summary.present && p.ai.embed.present)) return false;
+      if (st === "has_ai" && !p.ai.summary.present && !p.ai.embed.present) return false;
+      if (st === "no_ai" && p.ai.summary.present && p.ai.embed.present) return false;
 
       // 分类过滤
       if (cat.length > 0 && (!p.categories || !p.categories.includes(cat))) return false;
@@ -285,11 +285,7 @@ export function Posts(): import("solid-js").JSX.Element {
       </Show>
 
       <Show when={genMsg()}>
-        {(m) => (
-          <Alert variant={m().kind === "ok" ? "success" : "warning"}>
-            {m().text}
-          </Alert>
-        )}
+        {(m) => <Alert variant={m().kind === "ok" ? "success" : "warning"}>{m().text}</Alert>}
       </Show>
 
       {/* Filter and Search Bar */}
@@ -308,7 +304,10 @@ export function Posts(): import("solid-js").JSX.Element {
               value={categoryFilter()}
               onChange={(e) => setCategoryFilter(e.currentTarget.value)}
               containerClass="w-36"
-              options={[{ label: "全部分类", value: "" }, ...allCategories().map((c) => ({ label: c, value: c }))]}
+              options={[
+                { label: "全部分类", value: "" },
+                ...allCategories().map((c) => ({ label: c, value: c })),
+              ]}
             />
           </Show>
         </div>
@@ -383,8 +382,7 @@ export function Posts(): import("solid-js").JSX.Element {
                       <input
                         type="checkbox"
                         checked={
-                          list().length > 0 &&
-                          list().every((p) => selectedPaths().includes(p.path))
+                          list().length > 0 && list().every((p) => selectedPaths().includes(p.path))
                         }
                         onChange={() => toggleSelectAll(list().map((p) => p.path))}
                         class="rounded text-[var(--accent)] cursor-pointer"
@@ -466,24 +464,40 @@ export function Posts(): import("solid-js").JSX.Element {
                           <div class="flex items-center gap-1.5 text-xs">
                             <span
                               class={`inline-flex items-center gap-0.5 ${
-                                post.ai.summary.present ? "text-[var(--ok)] font-medium" : "text-[var(--muted)]"
+                                post.ai.summary.present
+                                  ? "text-[var(--ok)] font-medium"
+                                  : "text-[var(--muted)]"
                               }`}
-                              title={post.ai.summary.model ? `模型: ${post.ai.summary.model}` : "未生成"}
+                              title={
+                                post.ai.summary.model ? `模型: ${post.ai.summary.model}` : "未生成"
+                              }
                             >
                               <span
-                                class={post.ai.summary.present ? "i-ri-checkbox-circle-fill" : "i-ri-close-circle-line"}
+                                class={
+                                  post.ai.summary.present
+                                    ? "i-ri-checkbox-circle-fill"
+                                    : "i-ri-close-circle-line"
+                                }
                               />
                               摘要
                             </span>
                             <span class="text-[var(--border)]">/</span>
                             <span
                               class={`inline-flex items-center gap-0.5 ${
-                                post.ai.embed.present ? "text-[var(--ok)] font-medium" : "text-[var(--muted)]"
+                                post.ai.embed.present
+                                  ? "text-[var(--ok)] font-medium"
+                                  : "text-[var(--muted)]"
                               }`}
-                              title={post.ai.embed.model ? `模型: ${post.ai.embed.model}` : "未生成"}
+                              title={
+                                post.ai.embed.model ? `模型: ${post.ai.embed.model}` : "未生成"
+                              }
                             >
                               <span
-                                class={post.ai.embed.present ? "i-ri-checkbox-circle-fill" : "i-ri-close-circle-line"}
+                                class={
+                                  post.ai.embed.present
+                                    ? "i-ri-checkbox-circle-fill"
+                                    : "i-ri-close-circle-line"
+                                }
                               />
                               嵌入
                             </span>
@@ -498,7 +512,9 @@ export function Posts(): import("solid-js").JSX.Element {
                               loading={generatingPath() === post.path}
                               disabled={generatingPath() !== null}
                               onClick={() => void handleGenerateAi(post)}
-                              icon={generatingPath() === post.path ? undefined : "i-ri-sparkling-line"}
+                              icon={
+                                generatingPath() === post.path ? undefined : "i-ri-sparkling-line"
+                              }
                               title="生成摘要与向量嵌入"
                             >
                               {generatingPath() === post.path

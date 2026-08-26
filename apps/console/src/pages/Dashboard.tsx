@@ -121,7 +121,9 @@ export function Dashboard(): import("solid-js").JSX.Element {
                           <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-[var(--accent)] text-white font-mono">
                             {String(count)}
                           </span>
-                          <span class="text-[10px] text-[var(--muted)] font-mono">({percent}%)</span>
+                          <span class="text-[10px] text-[var(--muted)] font-mono">
+                            ({percent}%)
+                          </span>
                         </div>
                       );
                     }}

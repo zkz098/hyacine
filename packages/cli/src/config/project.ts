@@ -84,10 +84,7 @@ export function resolveProjectConfig(
 
 import { execFileSync } from "node:child_process";
 
-export function resolveProjectId(
-  projectRoot: string,
-  config?: ProjectConfig,
-): string | undefined {
+export function resolveProjectId(projectRoot: string, config?: ProjectConfig): string | undefined {
   if (config?.projectId && config.projectId.trim().length > 0) {
     return config.projectId.trim();
   }

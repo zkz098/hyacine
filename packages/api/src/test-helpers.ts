@@ -410,7 +410,11 @@ export class FakeD1Database {
       if (lower.includes("deleted_at is null")) {
         rows = rows.filter((row) => row.deleted_at === null || row.deleted_at === undefined);
       }
-      if (lower.includes("where path =") || lower.includes("and path =") || lower.includes("and p.path =")) {
+      if (
+        lower.includes("where path =") ||
+        lower.includes("and path =") ||
+        lower.includes("and p.path =")
+      ) {
         const [path] = params as [string];
         rows = rows.filter((row) => row.path === path);
       } else if (lower.includes("where hash =")) {

@@ -114,12 +114,20 @@ export function Editor(): import("solid-js").JSX.Element {
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
   const handleEditorScroll = (): void => {
-    if (!syncScroll() || isSyncingLeft || mode() !== "split" || taEl === null || previewContainerEl === null) return;
+    if (
+      !syncScroll() ||
+      isSyncingLeft ||
+      mode() !== "split" ||
+      taEl === null ||
+      previewContainerEl === null
+    )
+      return;
     isSyncingRight = true;
     const maxScrollTop = taEl.scrollHeight - taEl.clientHeight;
     if (maxScrollTop > 0) {
       const ratio = taEl.scrollTop / maxScrollTop;
-      previewContainerEl.scrollTop = ratio * (previewContainerEl.scrollHeight - previewContainerEl.clientHeight);
+      previewContainerEl.scrollTop =
+        ratio * (previewContainerEl.scrollHeight - previewContainerEl.clientHeight);
     }
     requestAnimationFrame(() => {
       isSyncingRight = false;
@@ -127,7 +135,14 @@ export function Editor(): import("solid-js").JSX.Element {
   };
 
   const handlePreviewScroll = (): void => {
-    if (!syncScroll() || isSyncingRight || mode() !== "split" || taEl === null || previewContainerEl === null) return;
+    if (
+      !syncScroll() ||
+      isSyncingRight ||
+      mode() !== "split" ||
+      taEl === null ||
+      previewContainerEl === null
+    )
+      return;
     isSyncingLeft = true;
     const maxScrollTop = previewContainerEl.scrollHeight - previewContainerEl.clientHeight;
     if (maxScrollTop > 0) {
@@ -474,7 +489,10 @@ export function Editor(): import("solid-js").JSX.Element {
           label={label()}
           value={value()}
           onChange={(e) => set(e.currentTarget.value)}
-          options={[{ label: "—", value: "" }, ...(f.values ?? []).map((v) => ({ label: v, value: v }))]}
+          options={[
+            { label: "—", value: "" },
+            ...(f.values ?? []).map((v) => ({ label: v, value: v })),
+          ]}
         />
       );
     }
@@ -580,7 +598,13 @@ export function Editor(): import("solid-js").JSX.Element {
           </Badge>
 
           <Badge
-            variant={syncState() === "synced" ? "success" : syncState() === "offline" ? "neutral" : "warning"}
+            variant={
+              syncState() === "synced"
+                ? "success"
+                : syncState() === "offline"
+                  ? "neutral"
+                  : "warning"
+            }
             size="sm"
             dot
           >
@@ -817,7 +841,9 @@ export function Editor(): import("solid-js").JSX.Element {
                   <button
                     type="button"
                     onClick={() => setSyncScroll(!syncScroll())}
-                    title={syncScroll() ? "已开启双向同步滚动（点击切换）" : "已关闭同步滚动（点击切换）"}
+                    title={
+                      syncScroll() ? "已开启双向同步滚动（点击切换）" : "已关闭同步滚动（点击切换）"
+                    }
                     class={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors cursor-pointer border ${
                       syncScroll()
                         ? "bg-[var(--g-3)] text-[var(--text)] border-[var(--border)] font-medium"
@@ -872,9 +898,7 @@ export function Editor(): import("solid-js").JSX.Element {
             {/* Split / Source / Preview Container */}
             <div
               class={
-                mode() === "split"
-                  ? "grid grid-cols-1 lg:grid-cols-2 gap-3"
-                  : "flex flex-col gap-3"
+                mode() === "split" ? "grid grid-cols-1 lg:grid-cols-2 gap-3" : "flex flex-col gap-3"
               }
             >
               {(mode() === "split" || mode() === "source") && (

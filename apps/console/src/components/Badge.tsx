@@ -19,19 +19,23 @@ const variantClasses: Record<BadgeVariant, { badge: string; dot: string }> = {
     dot: "bg-[var(--muted)]",
   },
   primary: {
-    badge: "bg-[var(--note-primary-bg)] text-[var(--note-primary-text)] border-[var(--note-primary-border)]",
+    badge:
+      "bg-[var(--note-primary-bg)] text-[var(--note-primary-text)] border-[var(--note-primary-border)]",
     dot: "bg-[var(--note-primary-text)]",
   },
   success: {
-    badge: "bg-[var(--note-success-bg)] text-[var(--note-success-text)] border-[var(--note-success-border)]",
+    badge:
+      "bg-[var(--note-success-bg)] text-[var(--note-success-text)] border-[var(--note-success-border)]",
     dot: "bg-[var(--ok)]",
   },
   warning: {
-    badge: "bg-[var(--note-warning-bg)] text-[var(--note-warning-text)] border-[var(--note-warning-border)]",
+    badge:
+      "bg-[var(--note-warning-bg)] text-[var(--note-warning-text)] border-[var(--note-warning-border)]",
     dot: "bg-[var(--c-orange)]",
   },
   danger: {
-    badge: "bg-[var(--note-danger-bg)] text-[var(--note-danger-text)] border-[var(--note-danger-border)]",
+    badge:
+      "bg-[var(--note-danger-bg)] text-[var(--note-danger-text)] border-[var(--note-danger-border)]",
     dot: "bg-[var(--danger)]",
   },
   info: {

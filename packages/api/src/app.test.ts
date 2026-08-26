@@ -1154,7 +1154,13 @@ describe("posts 查询", () => {
         lastModified: now,
       },
     ];
-    await request(env, "POST", "/api/sync", { generatedAt: now, posts, assets: [], deletedPaths: [] }, token);
+    await request(
+      env,
+      "POST",
+      "/api/sync",
+      { generatedAt: now, posts, assets: [], deletedPaths: [] },
+      token,
+    );
 
     const all = (await (await request(env, "GET", "/api/posts", undefined, token)).json()) as {
       posts: Array<{ path: string }>;

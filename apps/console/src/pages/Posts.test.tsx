@@ -166,4 +166,3 @@ describe("Posts page", () => {
     expect(deleteCalledWith).toEqual({ paths: ["a.md"] });
   });
 });
-

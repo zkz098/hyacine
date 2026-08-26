@@ -136,7 +136,9 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     if (path.length === 0) {
       return c.json(errorBody("validation_error", "缺少 path 参数"), 400);
     }
-    const row = await c.env.DB.prepare("SELECT content FROM posts WHERE path = ? AND deleted_at IS NULL")
+    const row = await c.env.DB.prepare(
+      "SELECT content FROM posts WHERE path = ? AND deleted_at IS NULL",
+    )
       .bind(path)
       .first<{ content: string | null }>();
     if (row === null || row === undefined || row.content === null) {

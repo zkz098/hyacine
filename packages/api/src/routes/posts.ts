@@ -71,8 +71,7 @@ function toListItem(row: PostJoinRow): PostListItem {
 export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   app.get("/api/posts", authMiddleware(["posts.r"]), async (c) => {
     const prefix = (c.req.query("prefix") ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
-    let sql =
-      `SELECT p.path, p.slug, p.title, p.draft, p.categories, p.hash,
+    let sql = `SELECT p.path, p.slug, p.title, p.draft, p.categories, p.hash,
               p.created_at, p.updated_at, p.last_modified,
               a.summary, a.summary_model, a.summary_at,
               a.embed_model, a.embed_at, a.embed_vec
@@ -85,7 +84,9 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
       params.push(prefix, `${prefix}/%`);
     }
     sql += ` ORDER BY datetime(p.updated_at) DESC`;
-    const result = await c.env.DB.prepare(sql).bind(...params).all<PostJoinRow>();
+    const result = await c.env.DB.prepare(sql)
+      .bind(...params)
+      .all<PostJoinRow>();
 
     const posts = result.results.map((row) => toListItem(row));
     return c.json({ posts });
@@ -110,4 +111,3 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
     });
   });
 }
-

@@ -47,8 +47,7 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       if (c.env.CACHE !== undefined) {
         defer(
           c,
-          c.env.CACHE
-            .get(rateKey)
+          c.env.CACHE.get(rateKey)
             .then((value) =>
               c.env.CACHE.put(rateKey, String(Number(value ?? "0") + 1), { expirationTtl: 60 }),
             )
@@ -62,7 +61,10 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     // 成功：清掉计数
     if (c.env.CACHE !== undefined) {
-      defer(c, c.env.CACHE.delete(rateKey).catch(() => {}));
+      defer(
+        c,
+        c.env.CACHE.delete(rateKey).catch(() => {}),
+      );
     }
 
     const token = generateToken();

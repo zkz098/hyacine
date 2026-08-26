@@ -52,7 +52,11 @@ const {
       { type: "module" },
     );
   },
-  overwriteImports(importObject: { env?: Record<string, unknown>; napi?: Record<string, unknown>; emnapi?: Record<string, unknown> }) {
+  overwriteImports(importObject: {
+    env?: Record<string, unknown>;
+    napi?: Record<string, unknown>;
+    emnapi?: Record<string, unknown>;
+  }) {
     importObject.env = {
       ...importObject.env,
       ...importObject.napi,

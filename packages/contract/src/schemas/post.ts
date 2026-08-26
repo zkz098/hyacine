@@ -92,4 +92,3 @@ export const PostDeleteResponseSchema = z.object({
 });
 
 export type PostDeleteResponse = z.infer<typeof PostDeleteResponseSchema>;
-

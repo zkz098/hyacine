@@ -280,7 +280,14 @@ export function Assets(): import("solid-js").JSX.Element {
           { key: "video", label: "视频", icon: "i-ri-video-line", count: categoryCounts().video },
           { key: "font", label: "字体", icon: "i-ri-font-size", count: categoryCounts().font },
           ...(categoryCounts().other > 0
-            ? [{ key: "other", label: "其他", icon: "i-ri-file-3-line", count: categoryCounts().other }]
+            ? [
+                {
+                  key: "other",
+                  label: "其他",
+                  icon: "i-ri-file-3-line",
+                  count: categoryCounts().other,
+                },
+              ]
             : []),
         ]}
       />
@@ -338,12 +345,12 @@ export function Assets(): import("solid-js").JSX.Element {
                 icon={
                   activeCategory() === "all"
                     ? "i-ri-folder-open-line"
-                    : CATEGORY_CONFIG[activeCategory() as AssetType]?.icon ?? "i-ri-file-3-line"
+                    : (CATEGORY_CONFIG[activeCategory() as AssetType]?.icon ?? "i-ri-file-3-line")
                 }
                 title={
                   assets()?.length === 0
                     ? t("assets.empty")
-                    : `暂无${activeCategory() === "all" ? "" : CATEGORY_CONFIG[activeCategory() as AssetType]?.label ?? ""}资产`
+                    : `暂无${activeCategory() === "all" ? "" : (CATEGORY_CONFIG[activeCategory() as AssetType]?.label ?? "")}资产`
                 }
                 description={
                   assets()?.length === 0
@@ -363,7 +370,10 @@ export function Assets(): import("solid-js").JSX.Element {
                     const meta = CATEGORY_CONFIG[cat];
 
                     return (
-                      <Card hoverable class="flex flex-col justify-between p-0 overflow-hidden group">
+                      <Card
+                        hoverable
+                        class="flex flex-col justify-between p-0 overflow-hidden group"
+                      >
                         {/* Preview / Thumbnail Box */}
                         <div class="h-40 bg-[var(--g-2)] relative flex items-center justify-center overflow-hidden border-b border-[var(--border)]">
                           <Show
@@ -508,7 +518,9 @@ export function Assets(): import("solid-js").JSX.Element {
                                   size="xs"
                                   icon="i-ri-code-s-slash-line"
                                   onClick={() => void copyTag(asset)}
-                                  title={cat === "image" ? "复制 Markdown 图片标签" : "复制引用标签"}
+                                  title={
+                                    cat === "image" ? "复制 Markdown 图片标签" : "复制引用标签"
+                                  }
                                 >
                                   {cat === "image" ? "复制 MD" : "复制标签"}
                                 </Button>

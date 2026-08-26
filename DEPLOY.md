@@ -29,14 +29,14 @@
 
 ## 2. 前置要求
 
-| 组件 | 版本/说明 |
-|---|---|
-| Node.js | ≥ 22 |
-| pnpm | ≥ 9（workspace） |
-| wrangler | ≥ 3（`pnpm dlx wrangler` 或全局安装） |
-| Cloudflare 账号 | 用于 D1/KV/R2/AI 绑定 |
-| （桌面构建）Rust | stable toolchain + MSVC（Windows 见 §5.2） |
-| （桌面构建）VS | Visual Studio 2026 Community（VC++ 工具集，Windows） |
+| 组件             | 版本/说明                                            |
+| ---------------- | ---------------------------------------------------- |
+| Node.js          | ≥ 22                                                 |
+| pnpm             | ≥ 9（workspace）                                     |
+| wrangler         | ≥ 3（`pnpm dlx wrangler` 或全局安装）                |
+| Cloudflare 账号  | 用于 D1/KV/R2/AI 绑定                                |
+| （桌面构建）Rust | stable toolchain + MSVC（Windows 见 §5.2）           |
+| （桌面构建）VS   | Visual Studio 2026 Community（VC++ 工具集，Windows） |
 
 安装依赖：
 
@@ -299,16 +299,16 @@ hyc tokens:list   # 管理 token
 
 ### 4.3 常用命令
 
-| 命令 | 说明 |
-|---|---|
-| `hyc install [dir]`（别名 `setup`） | 安装博客（克隆 `theme-shoka-x/astro-blog-shokax` 模板，`--source github/gh-proxy/gh-proxy-v6`，`--install` 装依赖） |
-| `hyc init` | 现有目录初始化 `hyacine.yml` + 目录结构 |
-| `hyc new <title>` / `list` / `edit` / `rename` / `move` | 文章管理（多集合：list 展示集合；new 写入首个集合） |
-| `hyc collections` | 从 Astro 内容集合生成 `hyacine.collections.json`（类型信息：schema + UI 字段） |
-| `hyc sync` | 全量索引上行（hash diff），返回 `ai.needs` |
-| `hyc ai:summary` / `ai:embed` / `ai:similar` | 按需跑 AI 产物 |
-| `hyc build` / `preview` / `deploy` | 博客构建/预览/部署（git push） |
-| `hyc stats` / `backup` | 统计/备份 |
+| 命令                                                    | 说明                                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `hyc install [dir]`（别名 `setup`）                     | 安装博客（克隆 `theme-shoka-x/astro-blog-shokax` 模板，`--source github/gh-proxy/gh-proxy-v6`，`--install` 装依赖） |
+| `hyc init`                                              | 现有目录初始化 `hyacine.yml` + 目录结构                                                                             |
+| `hyc new <title>` / `list` / `edit` / `rename` / `move` | 文章管理（多集合：list 展示集合；new 写入首个集合）                                                                 |
+| `hyc collections`                                       | 从 Astro 内容集合生成 `hyacine.collections.json`（类型信息：schema + UI 字段）                                      |
+| `hyc sync`                                              | 全量索引上行（hash diff），返回 `ai.needs`                                                                          |
+| `hyc ai:summary` / `ai:embed` / `ai:similar`            | 按需跑 AI 产物                                                                                                      |
+| `hyc build` / `preview` / `deploy`                      | 博客构建/预览/部署（git push）                                                                                      |
+| `hyc stats` / `backup`                                  | 统计/备份                                                                                                           |
 
 > slug 策略：显式 slug 神圣（保留中文）；自动生成时中文标题转拼音（`你好世界`→`ni-hao-shi-jie`）。
 
@@ -338,6 +338,7 @@ pnpm tauri build
 ```
 
 注意：
+
 - **必须**先 vcvars64 再 cargo（直接 cargo 会因 Git Bash 的 link.exe 遮蔽报 `link: extra operand`/找不到 cl.exe）。
 - `tauri build` 的 `beforeBuildCommand` 会先重建 console dist，避免 exe 内嵌旧前端。
 - 图标/资源：`icons/icon.ico`（Windows 资源）+ `icon.png`。
@@ -350,12 +351,12 @@ pnpm tauri build
 
 桌面能力矩阵：
 
-| 能力 | 离线 | 需登录（云平面） |
-|---|---|---|
-| 选择目录/列表/编辑(源码+satteri 预览)/保存 | ✓ | — |
-| git commit / push | ✓ | — |
-| 云平面页（dashboard/posts/sync/assets/tokens） | ✗ | ✓ |
-| AI 摘要（Editor 按钮） | ✗ | ✓ |
+| 能力                                           | 离线 | 需登录（云平面） |
+| ---------------------------------------------- | ---- | ---------------- |
+| 选择目录/列表/编辑(源码+satteri 预览)/保存     | ✓    | —                |
+| git commit / push                              | ✓    | —                |
+| 云平面页（dashboard/posts/sync/assets/tokens） | ✗    | ✓                |
+| AI 摘要（Editor 按钮）                         | ✗    | ✓                |
 
 ---
 
@@ -390,18 +391,18 @@ git add -A && git commit -m "update" && git push
 
 ## 7. 常见问题排查
 
-| 现象 | 原因 / 处理 |
-|---|---|
-| `/api/health` 404 或 5xx | 未部署 / D1 未建表 → `migrate:remote` |
-| `needsSetup:true` | 未配置 `SETUP_CODE` secret |
-| setup 返回 401 invalid_code | SETUP_CODE 与请求不符；或触发了限流（10 次/分/IP）等 1 分钟 |
-| presign PUT 403 | R2 bucket CORS 未设置（浏览器直传）；或 R2 凭据/endpoint 错 |
-| AI summary 502 ai_failed | `AI_SUMMARY_ENDPOINT/KEY/MODEL` 未配或模型不可用；正文过长被截到 8000 字符 |
-| AI embed 503 ai_not_configured | Worker 未绑定 `[ai]`（wrangler.toml 的 AI binding） |
-| 桌面预览白屏/报 wasm | 页面未跨域隔离：dev 检查 vite 头，生产检查 `tauri.conf` security.headers |
-| 桌面选目录「无权限」 | v0 已放开 fs scope 到 `**`；后续收紧为动态授权 |
-| 中文 slug/文件名 sync 400 | 需更新 contract（`SlugSchema/PostPathSchema` 已支持 Unicode），确保两端同版本 |
-| token 撤销无效 | tokenId 是 hash 前 16 位前缀，revoke 用前缀匹配（范围查询） |
+| 现象                           | 原因 / 处理                                                                   |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `/api/health` 404 或 5xx       | 未部署 / D1 未建表 → `migrate:remote`                                         |
+| `needsSetup:true`              | 未配置 `SETUP_CODE` secret                                                    |
+| setup 返回 401 invalid_code    | SETUP_CODE 与请求不符；或触发了限流（10 次/分/IP）等 1 分钟                   |
+| presign PUT 403                | R2 bucket CORS 未设置（浏览器直传）；或 R2 凭据/endpoint 错                   |
+| AI summary 502 ai_failed       | `AI_SUMMARY_ENDPOINT/KEY/MODEL` 未配或模型不可用；正文过长被截到 8000 字符    |
+| AI embed 503 ai_not_configured | Worker 未绑定 `[ai]`（wrangler.toml 的 AI binding）                           |
+| 桌面预览白屏/报 wasm           | 页面未跨域隔离：dev 检查 vite 头，生产检查 `tauri.conf` security.headers      |
+| 桌面选目录「无权限」           | v0 已放开 fs scope 到 `**`；后续收紧为动态授权                                |
+| 中文 slug/文件名 sync 400      | 需更新 contract（`SlugSchema/PostPathSchema` 已支持 Unicode），确保两端同版本 |
+| token 撤销无效                 | tokenId 是 hash 前 16 位前缀，revoke 用前缀匹配（范围查询）                   |
 
 ---
 

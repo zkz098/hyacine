@@ -258,7 +258,12 @@ export function Settings(): import("solid-js").JSX.Element {
         onChange={(k) => setActiveTab(k as SettingsTab)}
         items={[
           { key: "api", label: "连接与外观", icon: "i-ri-global-line" },
-          { key: "cloud", label: "云端动态配置", icon: "i-ri-cloud-line", disabled: !apiStore.isAuthed() },
+          {
+            key: "cloud",
+            label: "云端动态配置",
+            icon: "i-ri-cloud-line",
+            disabled: !apiStore.isAuthed(),
+          },
           { key: "plugins", label: "语法插件", icon: "i-ri-puzzle-line" },
           { key: "system", label: "关于与桌面", icon: "i-ri-information-line" },
         ]}
@@ -284,12 +289,7 @@ export function Settings(): import("solid-js").JSX.Element {
             />
 
             <div class="flex items-center gap-2.5 pt-1">
-              <Button
-                variant="primary"
-                size="sm"
-                icon="i-ri-save-line"
-                onClick={handleSave}
-              >
+              <Button variant="primary" size="sm" icon="i-ri-save-line" onClick={handleSave}>
                 {t("settings.save")}
               </Button>
               <Button
@@ -375,7 +375,9 @@ export function Settings(): import("solid-js").JSX.Element {
             <CardHeader>
               <div>
                 <CardTitle>{t("settings.cloud.title")}</CardTitle>
-                <CardDescription>配置云端 AI 服务提供商、GitHub 桥接导出及 R2 对象存储参数（即时生效，免重新部署）</CardDescription>
+                <CardDescription>
+                  配置云端 AI 服务提供商、GitHub 桥接导出及 R2 对象存储参数（即时生效，免重新部署）
+                </CardDescription>
               </div>
               <Button
                 variant="outline"
@@ -396,7 +398,9 @@ export function Settings(): import("solid-js").JSX.Element {
               <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
                 <div class="flex items-center gap-2">
                   <span class="i-ri-sparkling-fill text-[var(--accent)]" />
-                  <span class="font-semibold text-xs text-[var(--text)]">{t("settings.cloud.ai")}</span>
+                  <span class="font-semibold text-xs text-[var(--text)]">
+                    {t("settings.cloud.ai")}
+                  </span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -460,7 +464,9 @@ export function Settings(): import("solid-js").JSX.Element {
               <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
                 <div class="flex items-center gap-2">
                   <span class="i-ri-node-tree text-[var(--accent)]" />
-                  <span class="font-semibold text-xs text-[var(--text)]">向量嵌入 (Vector Embeddings)</span>
+                  <span class="font-semibold text-xs text-[var(--text)]">
+                    向量嵌入 (Vector Embeddings)
+                  </span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -488,7 +494,9 @@ export function Settings(): import("solid-js").JSX.Element {
               <div class="flex flex-col gap-3 pb-4 border-b border-[var(--border)]">
                 <div class="flex items-center gap-2">
                   <span class="i-ri-github-fill text-[var(--text)]" />
-                  <span class="font-semibold text-xs text-[var(--text)]">Primary 模式 (GitHub 桥接)</span>
+                  <span class="font-semibold text-xs text-[var(--text)]">
+                    Primary 模式 (GitHub 桥接)
+                  </span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -518,7 +526,9 @@ export function Settings(): import("solid-js").JSX.Element {
               <div class="flex flex-col gap-3">
                 <div class="flex items-center gap-2">
                   <span class="i-ri-database-2-line text-[var(--accent)]" />
-                  <span class="font-semibold text-xs text-[var(--text)]">{t("settings.cloud.r2")}</span>
+                  <span class="font-semibold text-xs text-[var(--text)]">
+                    {t("settings.cloud.r2")}
+                  </span>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -586,7 +596,9 @@ export function Settings(): import("solid-js").JSX.Element {
               <label class="flex items-center gap-2.5 text-xs font-semibold cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={pluginEnabledTick() >= 0 && loadEnabledPlugins().includes("shokax-basic")}
+                  checked={
+                    pluginEnabledTick() >= 0 && loadEnabledPlugins().includes("shokax-basic")
+                  }
                   onChange={(e) => {
                     togglePluginEnabled("shokax-basic", e.currentTarget.checked);
                     setPluginEnabledTick((v) => v + 1);
@@ -598,14 +610,17 @@ export function Settings(): import("solid-js").JSX.Element {
                 <span>shokax-basic 内置扩展语法</span>
               </label>
               <p class="text-[11px] text-[var(--muted)] pl-6">
-                包含 Note 语义卡片、code-group 代码分组、span/ruby 注音、spoiler 黑幕剧透、++插入强调++、Quiz 测验及 Tabs 标签卡片。
+                包含 Note 语义卡片、code-group 代码分组、span/ruby 注音、spoiler
+                黑幕剧透、++插入强调++、Quiz 测验及 Tabs 标签卡片。
               </p>
             </div>
 
             <Show when={isTauri()}>
               <div class="flex flex-col gap-2.5 pt-2 border-t border-[var(--border)]">
                 <div class="flex items-center justify-between">
-                  <span class="font-semibold text-xs text-[var(--text)]">项目级自定义插件 (.hyacine/plugins/*.js)</span>
+                  <span class="font-semibold text-xs text-[var(--text)]">
+                    项目级自定义插件 (.hyacine/plugins/*.js)
+                  </span>
                   <Button
                     variant="outline"
                     size="xs"
@@ -654,13 +669,17 @@ export function Settings(): import("solid-js").JSX.Element {
             <div class="flex flex-col gap-2 text-xs">
               <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
                 <span class="text-[var(--muted)]">运行模式</span>
-                <span class="font-semibold font-mono">{isTauri() ? "Tauri 桌面端" : "Web 浏览器端"}</span>
+                <span class="font-semibold font-mono">
+                  {isTauri() ? "Tauri 桌面端" : "Web 浏览器端"}
+                </span>
               </div>
 
               <Show when={isTauri()}>
                 <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
                   <span class="text-[var(--muted)]">本地项目目录</span>
-                  <span class="font-mono truncate max-w-sm">{projectStore.projectDir() ?? "未选择"}</span>
+                  <span class="font-mono truncate max-w-sm">
+                    {projectStore.projectDir() ?? "未选择"}
+                  </span>
                 </div>
 
                 <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)] gap-2">

@@ -12,7 +12,9 @@ export default defineConfig({
       // src/editor/satteri-wasi-browser.ts）。仅替换裸导入，子路径(?url)仍走原包。
       {
         find: /^@bruits\/satteri-wasm32-wasi$/,
-        replacement: fileURLToPath(new URL("./src/editor/satteri-wasi-browser.ts", import.meta.url)),
+        replacement: fileURLToPath(
+          new URL("./src/editor/satteri-wasi-browser.ts", import.meta.url),
+        ),
       },
     ],
   },

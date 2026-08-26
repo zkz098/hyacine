@@ -10,10 +10,7 @@ export interface AlertProps {
   children: JSX.Element;
 }
 
-const noteVars: Record<
-  AlertVariant,
-  { border: string; bg: string; text: string; icon: string }
-> = {
+const noteVars: Record<AlertVariant, { border: string; bg: string; text: string; icon: string }> = {
   primary: {
     border: "var(--note-primary-border)",
     bg: "var(--note-primary-bg)",

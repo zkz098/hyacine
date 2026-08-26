@@ -75,7 +75,9 @@ describe("Workspace", () => {
         updatedAt: now,
       },
     ]);
-    const refreshSpy = vi.spyOn(projectStore, "refreshPosts").mockImplementation(() => Promise.resolve());
+    const refreshSpy = vi
+      .spyOn(projectStore, "refreshPosts")
+      .mockImplementation(() => Promise.resolve());
 
     render(() => (
       <MemoryRouter>
@@ -123,4 +125,3 @@ describe("Workspace", () => {
     });
   });
 });
-

@@ -78,9 +78,9 @@ describe("extractWorkersAiText", () => {
     expect(extractWorkersAiText({ outputText: "c" })).toBe("c");
   });
   it("OpenAI 兼容 {choices[].message.content} → 提取", () => {
-    expect(
-      extractWorkersAiText({ choices: [{ message: { content: "摘要内容" } }] }),
-    ).toBe("摘要内容");
+    expect(extractWorkersAiText({ choices: [{ message: { content: "摘要内容" } }] })).toBe(
+      "摘要内容",
+    );
   });
   it("多模态部分数组（string 或 [{text}]）→ 拼接提取", () => {
     expect(extractWorkersAiText({ response: ["第一段", { text: "第二段" }] })).toBe(
@@ -99,9 +99,9 @@ describe("extractWorkersAiText", () => {
     );
   });
   it("REST /ai/run 信封 {result:{...}} → 解包提取（response/choices）", () => {
-    expect(extractWorkersAiText({ success: true, errors: [], result: { response: "信封摘要" } })).toBe(
-      "信封摘要",
-    );
+    expect(
+      extractWorkersAiText({ success: true, errors: [], result: { response: "信封摘要" } }),
+    ).toBe("信封摘要");
     expect(
       extractWorkersAiText({
         success: true,
@@ -141,7 +141,11 @@ describe("extractWorkersAiText", () => {
   it("推理模型（DeepSeek-R1 / Qwen 等）无 content 仅 reasoning_content → 回退提取", () => {
     expect(
       extractWorkersAiText({
-        choices: [{ message: { role: "assistant", content: null, reasoning_content: "思考得出的摘要内容" } }],
+        choices: [
+          {
+            message: { role: "assistant", content: null, reasoning_content: "思考得出的摘要内容" },
+          },
+        ],
       }),
     ).toBe("思考得出的摘要内容");
   });

@@ -2,7 +2,9 @@ import { splitProps, type JSX } from "solid-js";
 
 export function TableContainer(props: { class?: string; children: JSX.Element }): JSX.Element {
   return (
-    <div class={`surface overflow-auto border border-[var(--border)] rounded-[4px] ${props.class ?? ""}`}>
+    <div
+      class={`surface overflow-auto border border-[var(--border)] rounded-[4px] ${props.class ?? ""}`}
+    >
       {props.children}
     </div>
   );
@@ -56,9 +58,7 @@ export function TableRow(
   );
 }
 
-export function TableHeader(
-  allProps: JSX.ThHTMLAttributes<HTMLTableCellElement>,
-): JSX.Element {
+export function TableHeader(allProps: JSX.ThHTMLAttributes<HTMLTableCellElement>): JSX.Element {
   const [local, others] = splitProps(allProps, ["class", "children"]);
   return (
     <th class={`px-3.5 py-2.5 font-semibold text-xs ${local.class ?? ""}`} {...others}>

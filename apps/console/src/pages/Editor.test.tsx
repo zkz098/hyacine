@@ -99,7 +99,9 @@ describe("Editor Component with Undo/Redo", () => {
 
     const undoBtn = await screen.findByRole("button", { name: /撤销/i });
     const snippetBtn = await screen.findByTitle("提示卡");
-    const textarea = (await screen.findByPlaceholderText("开始书写 Markdown / MDX 精彩内容...")) as HTMLTextAreaElement;
+    const textarea = (await screen.findByPlaceholderText(
+      "开始书写 Markdown / MDX 精彩内容...",
+    )) as HTMLTextAreaElement;
 
     expect(undoBtn).toBeDisabled();
 
@@ -118,7 +120,9 @@ describe("Editor Component with Undo/Redo", () => {
     render(() => <Editor />);
 
     const undoBtn = await screen.findByRole("button", { name: /撤销/i });
-    const textarea = (await screen.findByPlaceholderText("开始书写 Markdown / MDX 精彩内容...")) as HTMLTextAreaElement;
+    const textarea = (await screen.findByPlaceholderText(
+      "开始书写 Markdown / MDX 精彩内容...",
+    )) as HTMLTextAreaElement;
 
     // 输入文本
     fireEvent.input(textarea, { target: { value: "Keyboard shortcut test" } });

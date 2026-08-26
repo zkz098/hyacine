@@ -31,7 +31,10 @@ export function Select(allProps: SelectProps): JSX.Element {
   return (
     <div class={`flex flex-col gap-1 text-sm ${local.containerClass ?? ""}`}>
       <Show when={local.label}>
-        <label for={local.id} class="font-medium text-xs text-[var(--text)] flex items-center gap-1">
+        <label
+          for={local.id}
+          class="font-medium text-xs text-[var(--text)] flex items-center gap-1"
+        >
           {local.label}
         </label>
       </Show>

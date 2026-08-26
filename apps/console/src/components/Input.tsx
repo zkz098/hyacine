@@ -26,7 +26,10 @@ export function Input(allProps: InputProps): JSX.Element {
   return (
     <div class={`flex flex-col gap-1 text-sm ${local.containerClass ?? ""}`}>
       <Show when={local.label}>
-        <label for={local.id} class="font-medium text-xs text-[var(--text)] flex items-center gap-1">
+        <label
+          for={local.id}
+          class="font-medium text-xs text-[var(--text)] flex items-center gap-1"
+        >
           {local.label}
         </label>
       </Show>
@@ -48,9 +51,7 @@ export function Input(allProps: InputProps): JSX.Element {
           {...others}
         />
         <Show when={local.trailing}>
-          <div class="absolute right-3 flex items-center text-[var(--muted)]">
-            {local.trailing}
-          </div>
+          <div class="absolute right-3 flex items-center text-[var(--muted)]">{local.trailing}</div>
         </Show>
       </div>
       <Show when={local.error}>

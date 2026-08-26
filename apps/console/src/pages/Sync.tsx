@@ -257,15 +257,23 @@ export function Sync(): import("solid-js").JSX.Element {
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 text-xs">
             <div class="p-3 bg-[var(--surface)] rounded-[4px] border border-[var(--border)]">
               <span class="font-semibold text-[var(--text)] block mb-1">1. 本地 → 云端同步</span>
-              <span>将本地博客目录中的 Markdown 文件与资产索引计算 Hash 并批量上传到 Cloudflare D1 & R2。</span>
+              <span>
+                将本地博客目录中的 Markdown 文件与资产索引计算 Hash 并批量上传到 Cloudflare D1 &
+                R2。
+              </span>
             </div>
             <div class="p-3 bg-[var(--surface)] rounded-[4px] border border-[var(--border)]">
               <span class="font-semibold text-[var(--text)] block mb-1">2. 云端 AI 与索引</span>
-              <span>云端自动生成或按需生成 Summary 摘要与 Vector 嵌入，提供给前台搜索与 AI 功能。</span>
+              <span>
+                云端自动生成或按需生成 Summary 摘要与 Vector 嵌入，提供给前台搜索与 AI 功能。
+              </span>
             </div>
             <div class="p-3 bg-[var(--surface)] rounded-[4px] border border-[var(--border)]">
               <span class="font-semibold text-[var(--text)] block mb-1">3. Git 导出 (Primary)</span>
-              <span>在网页/远程端进行的修改，通过 GitHub Dispatch 触发 Action 回写到 GitHub 仓库完成闭环。</span>
+              <span>
+                在网页/远程端进行的修改，通过 GitHub Dispatch 触发 Action 回写到 GitHub
+                仓库完成闭环。
+              </span>
             </div>
           </div>
         </CardDescription>
@@ -448,7 +456,10 @@ export function Sync(): import("solid-js").JSX.Element {
           <div class="text-xs text-[var(--muted)] leading-relaxed">
             为防止误选本地目录导致线上数据被污染或意外覆盖，系统已自动拦截本次同步。
             <br />
-            若您正在执行合法的项目迁移或灾难恢复，且当前使用的 API Token 具备 <strong>admin</strong> 权限，请在下方输入当前本地项目指纹{" "}
+            若您正在执行合法的项目迁移或灾难恢复，且当前使用的 API Token 具备 <strong>
+              admin
+            </strong>{" "}
+            权限，请在下方输入当前本地项目指纹{" "}
             <code class="font-mono text-[var(--text)] font-semibold">
               {mismatchInfo()?.incomingProjectId}
             </code>{" "}
@@ -489,10 +500,12 @@ export function Sync(): import("solid-js").JSX.Element {
       >
         <div class="flex flex-col gap-3">
           <Alert variant="warning">
-            本次同步试图从云端删除 <strong>{deleteInfo()?.attemptedDeleteCount}</strong> 篇文章（已超过单次安全删除阈值 {deleteInfo()?.threshold} 篇）。
+            本次同步试图从云端删除 <strong>{deleteInfo()?.attemptedDeleteCount}</strong>{" "}
+            篇文章（已超过单次安全删除阈值 {deleteInfo()?.threshold} 篇）。
           </Alert>
           <div class="text-xs text-[var(--muted)] leading-relaxed">
-            删除后的文章将在云端进入 30 天软删除回收期，不会立即销毁 AI 产物。如果您确定在本地删除了这些文章并希望同步下架，请点击下方确认按钮。
+            删除后的文章将在云端进入 30 天软删除回收期，不会立即销毁 AI
+            产物。如果您确定在本地删除了这些文章并希望同步下架，请点击下方确认按钮。
           </div>
         </div>
       </Modal>

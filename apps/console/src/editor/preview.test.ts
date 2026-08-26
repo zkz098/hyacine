@@ -39,7 +39,7 @@ describe("satteri 一致性命中（evaluate + 组件映射）", () => {
 
   it("Quiz 组件族不再缺失（回归：Expected component QuizGroup）", async () => {
     const out = await renderPreview(
-      "<QuizGroup><Quiz type=\"single\"><QuizOptions><QuizOption correct>对</QuizOption></QuizOptions><QuizAnswer>解释</QuizAnswer></Quiz></QuizGroup>",
+      '<QuizGroup><Quiz type="single"><QuizOptions><QuizOption correct>对</QuizOption></QuizOptions><QuizAnswer>解释</QuizAnswer></Quiz></QuizGroup>',
       true,
     );
     expect(out.querySelector(".quiz-group")).not.toBeNull();
