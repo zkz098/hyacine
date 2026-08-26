@@ -2,22 +2,31 @@
   "name": "@hyacine/sdk",
   "version": "0.1.0",
   "description": "Hyacine TS SDK: Astro SSG Live Collections Loader + AI Services & Client",
+  "files": [
+    "dist",
+    "docs",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./astro": {
-      "types": "./src/astro/index.ts",
-      "default": "./src/astro/index.ts"
+      "types": "./dist/astro/index.d.ts",
+      "default": "./dist/astro/index.js"
     },
     "./ai": {
-      "types": "./src/ai/index.ts",
-      "default": "./src/ai/index.ts"
+      "types": "./dist/ai/index.d.ts",
+      "default": "./dist/ai/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsdown src/index.ts src/astro/index.ts src/ai/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -28,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsdown": "^0.14.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   },
@@ -40,6 +50,6 @@
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }

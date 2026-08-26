@@ -1,16 +1,23 @@
 {
   "name": "@hyacine/contract",
   "version": "0.1.0",
-  "private": true,
   "description": "hyacine 三端契约：zod schemas + 推导类型 + typed client（唯一真相）",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -20,10 +27,11 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsdown": "^0.14.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }

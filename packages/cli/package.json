@@ -1,17 +1,29 @@
 {
   "name": "@hyacine/cli",
   "version": "0.1.0",
-  "private": true,
   "description": "hyacine CLI — local + remote modes",
   "bin": {
     "hyc": "./dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsdown src/index.ts -d dist --target node22 --format esm --clean",
-    "dev": "tsdown src/index.ts -d dist --target node22 --format esm --watch"
+    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean",
+    "dev": "tsdown src/index.ts -d dist --target node24 --format esm --watch"
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",
@@ -29,6 +41,6 @@
     "vitest": "^4.1.11"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }

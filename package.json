@@ -11,14 +11,22 @@
     "format:ci": "oxfmt --check .",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "build": "pnpm -r run build",
-    "check": "pnpm run lint:ci && pnpm run format:ci && pnpm run typecheck && pnpm run test"
+    "build": "pnpm --filter \"./packages/*\" --filter \"./apps/console\" run build",
+    "check": "pnpm run lint:ci && pnpm run format:ci && pnpm run typecheck && pnpm run test",
+    "changeset": "changeset",
+    "version-packages": "changeset version && pnpm install --no-frozen-lockfile",
+    "release": "pnpm run build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.1",
     "@types/node": "^24.0.0",
     "oxfmt": "^0.57.0",
     "oxlint": "^1.72.0",
+    "tsdown": "^0.14.0",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   },
   "packageManager": "pnpm@11.22.0"
 }
