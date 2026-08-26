@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "astro-blog-shokax 配套平台：Cloudflare 云端 API + hyc CLI + 管理台/桌面",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git"
+  },
   "type": "module",
   "scripts": {
     "lint": "oxlint . --fix",

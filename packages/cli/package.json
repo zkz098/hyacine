@@ -2,6 +2,12 @@
   "name": "@hyacine/cli",
   "version": "0.1.1",
   "description": "hyacine CLI — local + remote modes",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "hyc": "./dist/index.js"
   },

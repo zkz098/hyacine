@@ -2,6 +2,12 @@
   "name": "@hyacine/plugin-site-uptime",
   "version": "0.2.0",
   "description": "Hyacine 官方插件：站点运行时长统计与页脚展示",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "plugins/site-uptime"
+  },
   "files": [
     "src",
     "README.md"

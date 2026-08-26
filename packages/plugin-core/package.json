@@ -2,6 +2,12 @@
   "name": "@hyacine/plugin-core",
   "version": "0.2.0",
   "description": "Hyacine 插件系统核心：Manifest 契约、配置标准化与插件注册表",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "packages/plugin-core"
+  },
   "files": [
     "dist",
     "README.md"

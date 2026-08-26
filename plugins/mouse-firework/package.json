@@ -2,6 +2,12 @@
   "name": "@hyacine/plugin-mouse-firework",
   "version": "0.2.0",
   "description": "Hyacine 官方插件：鼠标点击烟花特效",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "plugins/mouse-firework"
+  },
   "files": [
     "src",
     "README.md"

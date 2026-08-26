@@ -2,6 +2,12 @@
   "name": "@hyacine/plugin-vercount",
   "version": "0.2.0",
   "description": "Hyacine 官方插件：页面/站点访问量与阅读量统计",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "plugins/vercount"
+  },
   "files": [
     "src",
     "README.md"

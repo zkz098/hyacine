@@ -2,6 +2,12 @@
   "name": "@hyacine/contract",
   "version": "0.1.1",
   "description": "hyacine 三端契约：zod schemas + 推导类型 + typed client（唯一真相）",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "packages/contract"
+  },
   "files": [
     "dist",
     "README.md"
