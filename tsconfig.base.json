@@ -4,7 +4,7 @@
     "module": "Preserve",
     "moduleResolution": "bundler",
     "moduleDetection": "force",
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "jsx": "preserve",
     "strict": true,
     "noEmit": true,
@@ -21,6 +21,8 @@
     "noImplicitOverride": true,
     "paths": {
       "@hyacine/contract": ["./packages/contract/src/index.ts"],
+      "@hyacine/plugin-core": ["./packages/plugin-core/src/index.ts"],
+      "@hyacine/plugin-astro": ["./packages/plugin-astro/src/index.ts"],
       "@hyacine/sdk": ["./packages/sdk/src/index.ts"],
       "@hyacine/sdk/*": ["./packages/sdk/src/*/index.ts", "./packages/sdk/src/*.ts"]
     }

@@ -1,0 +1,24 @@
+---
+import type { HyacineArticleContext } from "@hyacine/contract";
+// @ts-ignore virtual module
+import slots from "virtual:hyacine/slots-manifest";
+
+export interface Props {
+  name: string;
+  context?: HyacineArticleContext | Record<string, unknown> | null;
+  [key: string]: any;
+}
+
+const { name, context = null, ...extraProps } = Astro.props;
+const SlotComponent = slots ? slots[name] : null;
+---
+
+{
+  SlotComponent ? (
+    <SlotComponent context={context} extraProps={extraProps}>
+      <slot />
+    </SlotComponent>
+  ) : (
+    <slot />
+  )
+}

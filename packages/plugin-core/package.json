@@ -1,0 +1,39 @@
+{
+  "name": "@hyacine/plugin-core",
+  "version": "0.1.0",
+  "description": "Hyacine 插件系统核心：Manifest 契约、配置标准化与插件注册表",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
+    "typecheck": "oxlint -A all --type-aware --type-check .",
+    "typecheck:tsc": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hyacine/contract": "workspace:*",
+    "es-toolkit": "^1.39.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

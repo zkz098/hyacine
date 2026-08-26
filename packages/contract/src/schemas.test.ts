@@ -179,3 +179,34 @@ describe("presign request", () => {
     ).toBe(false);
   });
 });
+
+describe("plugin schemas", () => {
+  it("校验插件 Manifest 与入口", async () => {
+    const { PluginManifestSchema, HyacinePluginSystemConfigSchema } = await import("./index");
+    const manifest = {
+      name: "@hyacine/site-uptime",
+      version: "0.1.0",
+      minRenderCapability: "runtime-only",
+      entry: [
+        {
+          name: "site-uptime",
+          type: "runtime-only",
+          path: "./runtime.ts",
+          injectPoint: "footer-status",
+          options: { siteCreatedAt: "2024-01-01" },
+        },
+      ],
+    };
+    expect(PluginManifestSchema.safeParse(manifest).success).toBe(true);
+
+    const config = {
+      injectPoints: {
+        "footer-status": ".footer-status",
+        "post-footer": { selector: ".post-footer", position: "after", order: 10 },
+      },
+      postCollection: "posts",
+      plugins: [manifest],
+    };
+    expect(HyacinePluginSystemConfigSchema.safeParse(config).success).toBe(true);
+  });
+});

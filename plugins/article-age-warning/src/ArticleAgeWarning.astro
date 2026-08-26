@@ -1,0 +1,41 @@
+---
+const article = Astro.props.hyacineArticle;
+const dateField = typeof Astro.props.dateField === "string" ? Astro.props.dateField : "date";
+const message =
+  typeof Astro.props.message === "string"
+    ? Astro.props.message
+    : "这篇文章发布较早，内容可能已过时，请结合当前情况判断。";
+const maxAgeDays =
+  typeof Astro.props.maxAgeDays === "number" && Number.isFinite(Astro.props.maxAgeDays)
+    ? Astro.props.maxAgeDays
+    : 180;
+
+const rawArticleData = article?.data ?? article;
+const publishDateValue =
+  rawArticleData && typeof rawArticleData === "object"
+    ? Reflect.get(rawArticleData, dateField)
+    : undefined;
+
+const publishDate =
+  typeof publishDateValue === "string" || typeof publishDateValue === "number"
+    ? new Date(publishDateValue)
+    : null;
+
+const isValidPublishDate = publishDate !== null && !Number.isNaN(publishDate.getTime());
+const ageInDays = isValidPublishDate
+  ? Math.floor((Date.now() - publishDate.getTime()) / (1000 * 60 * 60 * 24))
+  : null;
+
+const shouldShowWarning = ageInDays !== null && ageInDays > maxAgeDays;
+---
+
+{
+  shouldShowWarning ? (
+    <aside
+      class="hyacine-article-age-warning"
+      style="margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 6px; border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.1); color: inherit; font-size: 0.95rem; line-height: 1.5;"
+    >
+      <span>⚠️ {message}（发布于 {ageInDays} 天前）</span>
+    </aside>
+  ) : null
+}

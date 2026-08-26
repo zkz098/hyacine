@@ -73,6 +73,32 @@ export default defineConfig({
               slug: "guides/build-pipeline",
               translations: { en: "Build Pipeline & CI/CD" },
             },
+            {
+              label: "插件系统与插槽集成",
+              slug: "guides/plugin-system",
+              translations: { en: "Plugin System & Slots" },
+            },
+          ],
+        },
+        {
+          label: "插件生态与开发",
+          translations: { en: "Plugin Ecosystem" },
+          items: [
+            {
+              label: "插件系统总览",
+              slug: "plugins/overview",
+              translations: { en: "Overview & Architecture" },
+            },
+            {
+              label: "开发自定义插件",
+              slug: "plugins/authoring",
+              translations: { en: "Plugin Authoring" },
+            },
+            {
+              label: "官方核心插件库",
+              slug: "plugins/official-plugins",
+              translations: { en: "Official Plugins" },
+            },
           ],
         },
         {
@@ -132,6 +158,11 @@ export default defineConfig({
               label: "Contract 类型契约",
               slug: "reference/contract",
               translations: { en: "Contract Types" },
+            },
+            {
+              label: "Plugin 契约与规范",
+              slug: "reference/plugin-spec",
+              translations: { en: "Plugin System Spec" },
             },
           ],
         },
