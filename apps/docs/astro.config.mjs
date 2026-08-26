@@ -8,9 +8,13 @@ export default defineConfig({
     starlight({
       title: "Hyacine",
       description: "A cloud-native headless platform & AI toolchain for modern Astro blogs",
-      social: {
-        github: "https://github.com/zkz098/hyacine",
-      },
+      social: [
+        {
+          icon: "github",
+          label: "GitHub",
+          href: "https://github.com/zkz098/hyacine",
+        },
+      ],
       defaultLocale: "root",
       locales: {
         root: {

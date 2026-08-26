@@ -16,15 +16,15 @@
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",
-    "aws4fetch": "^1.0.19",
-    "hono": "^4.7.0",
+    "aws4fetch": "^1.0.20",
+    "hono": "^4.13.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.0.0",
-    "@types/node": "^24.0.0",
-    "typescript": "^6.0.3",
+    "@cloudflare/workers-types": "^5.20260825.1",
+    "@types/node": "^26.3.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.11",
-    "wrangler": "^4.30.0"
+    "wrangler": "^4.125.0"
   }
 }
