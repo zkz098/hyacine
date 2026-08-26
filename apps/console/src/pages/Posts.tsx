@@ -111,6 +111,10 @@ export function Posts(): import("solid-js").JSX.Element {
   };
 
   const saveEdit = async (): Promise<void> => {
+    if (!primaryAvailable()) {
+      toast.warning("Replica 模式为只读副本，禁止在云端保存修改");
+      return;
+    }
     const path = editingPath();
     if (path === null) return;
     setEditSaving(true);
@@ -376,18 +380,17 @@ export function Posts(): import("solid-js").JSX.Element {
                             </Button>
 
                             <Button
-                              variant="secondary"
+                              variant={primaryAvailable() ? "secondary" : "outline"}
                               size="xs"
-                              disabled={!primaryAvailable()}
                               onClick={() => void openEdit(post.path)}
-                              icon="i-ri-edit-line"
+                              icon={primaryAvailable() ? "i-ri-edit-line" : "i-ri-eye-line"}
                               title={
                                 primaryAvailable()
                                   ? "在云端直接修改并触发 Git 导出"
-                                  : t("posts.editDisabled")
+                                  : t("posts.replicaReadOnlyTooltip")
                               }
                             >
-                              {t("posts.editRemote")}
+                              {primaryAvailable() ? t("posts.editRemote") : t("posts.viewReadOnly")}
                             </Button>
                           </div>
                         </TableCell>
@@ -401,31 +404,57 @@ export function Posts(): import("solid-js").JSX.Element {
         )}
       </Show>
 
-      {/* Remote Edit Modal */}
+      {/* Remote Edit / View Modal */}
       <Modal
         open={editingPath() !== null}
         onClose={() => setEditingPath(null)}
-        title={`远程编辑：${editingPath() ?? ""}`}
-        description="修改将直接写入 D1 数据库并同步触发 GitHub 导出任务"
+        title={
+          primaryAvailable()
+            ? `远程编辑：${editingPath() ?? ""}`
+            : `${t("posts.viewTitle")}：${editingPath() ?? ""}`
+        }
+        description={
+          primaryAvailable()
+            ? "修改将直接写入 D1 数据库并同步触发 GitHub 导出任务"
+            : "当前为 Replica 模式（只读副本），正文仅供查看与复制，无法在云端直接保存"
+        }
         size="xl"
         footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setEditingPath(null)}>
-              取消
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              loading={editSaving()}
-              onClick={() => void saveEdit()}
-              icon="i-ri-save-line"
-            >
-              {editSaving() ? t("posts.editing") : t("posts.editSave")}
-            </Button>
-          </>
+          <div class="flex items-center justify-between w-full">
+            <div class="text-xs text-[var(--muted)]">
+              <Show when={!primaryAvailable()}>
+                <span class="flex items-center gap-1 text-[var(--warning)] font-medium">
+                  <span class="i-ri-lock-line" />
+                  只读模式（禁止保存）
+                </span>
+              </Show>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditingPath(null)}>
+                {primaryAvailable() ? "取消" : "关闭"}
+              </Button>
+              <Show when={primaryAvailable()}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={editSaving()}
+                  onClick={() => void saveEdit()}
+                  icon="i-ri-save-line"
+                >
+                  {editSaving() ? t("posts.editing") : t("posts.editSave")}
+                </Button>
+              </Show>
+            </div>
+          </div>
         }
       >
         <div class="flex flex-col gap-3">
+          <Show when={!primaryAvailable()}>
+            <Alert variant="info" title="只读模式 (Replica)">
+              {t("posts.replicaReadOnlyNotice")}
+            </Alert>
+          </Show>
+
           <Show when={editError() !== null}>
             <Alert variant="error">{editError()}</Alert>
           </Show>
@@ -440,9 +469,18 @@ export function Posts(): import("solid-js").JSX.Element {
           <Show when={!editLoading()}>
             <textarea
               value={editContent()}
-              onInput={(e) => setEditContent(e.currentTarget.value)}
+              onInput={(e) => {
+                if (primaryAvailable()) {
+                  setEditContent(e.currentTarget.value);
+                }
+              }}
+              readOnly={!primaryAvailable()}
               spellcheck={false}
-              class="w-full min-h-[50vh] p-3 rounded-[4px] border border-[var(--border)] bg-[var(--bg)] text-xs sm:text-sm font-mono leading-relaxed resize-y focus:outline-none focus:border-[var(--accent)]"
+              class={`w-full min-h-[50vh] p-3 rounded-[4px] border border-[var(--border)] text-xs sm:text-sm font-mono leading-relaxed resize-y focus:outline-none ${
+                primaryAvailable()
+                  ? "bg-[var(--bg)] focus:border-[var(--accent)]"
+                  : "bg-[var(--g-1)] text-[var(--text)] cursor-default select-text"
+              }`}
               placeholder="文章 Markdown / MDX 源码..."
             />
           </Show>
