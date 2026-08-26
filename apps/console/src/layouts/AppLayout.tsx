@@ -27,6 +27,13 @@ const desktopNavItems: readonly NavItem[] = [
   { href: "/git", label: "git.title", icon: "i-ri-git-branch-line" },
 ];
 
+function currentProjectName(): string | null {
+  const dir = projectStore.projectDir();
+  if (!dir) return null;
+  const parts = dir.replace(/\\/g, "/").split("/");
+  return parts.pop() || dir;
+}
+
 export function AppLayout(props: { children: JSX.Element }): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,13 +46,6 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
 
   const toggleTheme = (): void => {
     apiStore.setTheme(apiStore.state.theme === "dark" ? "light" : "dark");
-  };
-
-  const currentProjectName = (): string | null => {
-    const dir = projectStore.projectDir();
-    if (!dir) return null;
-    const parts = dir.replace(/\\/g, "/").split("/");
-    return parts.pop() || dir;
   };
 
   return (
@@ -258,7 +258,7 @@ export function AppLayout(props: { children: JSX.Element }): JSX.Element {
         </header>
 
         {/* Main Body */}
-        <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+        <main class="flex-1 p-4 sm:p-6 w-full max-w-[1920px] mx-auto animate-fade-in">
           {props.children}
         </main>
       </div>

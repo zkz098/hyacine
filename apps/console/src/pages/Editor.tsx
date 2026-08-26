@@ -32,6 +32,8 @@ type SyncState = "offline" | "synced" | "unsynced";
 /** 把 satteri 渲染出的 DOM 节点挂到容器里 */
 function PreviewMount(props: {
   node: HTMLElement | null | undefined;
+  ref?: (el: HTMLDivElement | null) => void;
+  onScroll?: (e: Event) => void;
 }): import("solid-js").JSX.Element {
   let container: HTMLDivElement | null = null;
   createEffect(() => {
@@ -44,8 +46,10 @@ function PreviewMount(props: {
     <div
       ref={(el) => {
         container = el;
+        props.ref?.(el);
       }}
-      class="shokax-preview md min-h-[60vh] overflow-auto p-4 leading-relaxed"
+      onScroll={props.onScroll}
+      class="shokax-preview md flex-1 h-full overflow-y-auto p-4 leading-relaxed"
     />
   );
 }
@@ -76,6 +80,10 @@ export function Editor(): import("solid-js").JSX.Element {
   const [syncState, setSyncState] = createSignal<SyncState>("offline");
   const [syncingToApi, setSyncingToApi] = createSignal(false);
 
+  // 属性面板折叠与双向同步滚动
+  const [showFm, setShowFm] = createSignal(true);
+  const [syncScroll, setSyncScroll] = createSignal(true);
+
   // 视图模式：分栏 / 仅源码 / 仅预览
   const [mode, setMode] = createSignal<Mode>("split");
   const isMdxFile = (): boolean => /\.mdx$/i.test(path());
@@ -97,7 +105,36 @@ export function Editor(): import("solid-js").JSX.Element {
   const isPreviewBusy = (): boolean => previewNode.loading;
 
   let taEl: HTMLTextAreaElement | null = null;
+  let previewContainerEl: HTMLDivElement | null = null;
+  let isSyncingLeft = false;
+  let isSyncingRight = false;
   let debounceId: ReturnType<typeof setTimeout> | undefined;
+
+  const handleEditorScroll = (): void => {
+    if (!syncScroll() || isSyncingLeft || mode() !== "split" || taEl === null || previewContainerEl === null) return;
+    isSyncingRight = true;
+    const maxScrollTop = taEl.scrollHeight - taEl.clientHeight;
+    if (maxScrollTop > 0) {
+      const ratio = taEl.scrollTop / maxScrollTop;
+      previewContainerEl.scrollTop = ratio * (previewContainerEl.scrollHeight - previewContainerEl.clientHeight);
+    }
+    requestAnimationFrame(() => {
+      isSyncingRight = false;
+    });
+  };
+
+  const handlePreviewScroll = (): void => {
+    if (!syncScroll() || isSyncingRight || mode() !== "split" || taEl === null || previewContainerEl === null) return;
+    isSyncingLeft = true;
+    const maxScrollTop = previewContainerEl.scrollHeight - previewContainerEl.clientHeight;
+    if (maxScrollTop > 0) {
+      const ratio = previewContainerEl.scrollTop / maxScrollTop;
+      taEl.scrollTop = ratio * (taEl.scrollHeight - taEl.clientHeight);
+    }
+    requestAnimationFrame(() => {
+      isSyncingLeft = false;
+    });
+  };
 
   const handleSourceInput = (value: string): void => {
     setBody(value);
@@ -507,6 +544,16 @@ export function Editor(): import("solid-js").JSX.Element {
 
         <div class="flex items-center gap-2 shrink-0">
           <Button
+            variant={showFm() ? "secondary" : "outline"}
+            size="sm"
+            icon="i-ri-side-bar-line"
+            onClick={() => setShowFm(!showFm())}
+            title={showFm() ? "收起属性面板" : "展开属性面板"}
+          >
+            {showFm() ? "收起属性" : "展开属性"}
+          </Button>
+
+          <Button
             variant="outline"
             size="sm"
             loading={syncingToApi()}
@@ -570,122 +617,141 @@ export function Editor(): import("solid-js").JSX.Element {
 
       {/* Editor Main Grid */}
       <Show when={raw() !== null}>
-        <div class="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 items-start">
+        <div
+          class={
+            showFm()
+              ? "grid grid-cols-1 lg:grid-cols-[280px_1fr] xl:grid-cols-[300px_1fr] gap-4 items-start"
+              : "grid grid-cols-1 gap-4 items-start"
+          }
+        >
           {/* Frontmatter Sidebar */}
-          <Card class="flex flex-col gap-3">
-            <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
-              <span class="font-semibold text-xs text-[var(--text)] uppercase tracking-wider">
-                {t("editor.frontmatter")}
-              </span>
-              <SegmentedControl<FmMode>
-                value={fmMode()}
-                onChange={switchFmMode}
-                size="xs"
-                items={[
-                  { value: "form", label: "表单" },
-                  { value: "raw", label: "YAML" },
-                ]}
-              />
-            </div>
-
-            <Show when={fmMode() === "raw"}>
-              <div class="flex flex-col gap-1.5">
-                <span class="text-[11px] text-[var(--muted)]">
-                  YAML 原文（可增删修改任意属性，保存时自动解析）
+          <Show when={showFm()}>
+            <Card class="flex flex-col gap-3 h-[calc(100vh-14rem)] min-h-[500px] overflow-hidden">
+              <div class="flex items-center justify-between pb-2 border-b border-[var(--border)] shrink-0">
+                <span class="font-semibold text-xs text-[var(--text)] uppercase tracking-wider">
+                  {t("editor.frontmatter")}
                 </span>
-                <textarea
-                  value={fmRawText()}
-                  onInput={(e) => {
-                    setFmRawText(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  spellcheck={false}
-                  class="w-full p-2.5 rounded-[4px] border border-[var(--border)] bg-[var(--bg)] font-mono text-xs min-h-[45vh] resize-y focus:outline-none focus:border-[var(--accent)] leading-relaxed"
-                />
+                <div class="flex items-center gap-1.5">
+                  <SegmentedControl<FmMode>
+                    value={fmMode()}
+                    onChange={switchFmMode}
+                    size="xs"
+                    items={[
+                      { value: "form", label: "表单" },
+                      { value: "raw", label: "YAML" },
+                    ]}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFm(false)}
+                    class="w-6 h-6 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--g-2)] transition-colors cursor-pointer"
+                    title="收起属性面板"
+                    aria-label="Close Frontmatter"
+                  >
+                    <span class="i-ri-close-line text-sm" />
+                  </button>
+                </div>
               </div>
-            </Show>
 
-            <Show when={fmMode() === "form"}>
-              <div class="flex flex-col gap-3">
-                <Input
-                  label="文章标题"
-                  value={title()}
-                  onInput={(e) => {
-                    setTitle(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  placeholder="文章标题"
-                />
-
-                <Input
-                  label="Slug"
-                  value={slug()}
-                  onInput={(e) => {
-                    setSlug(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  placeholder="post-slug"
-                />
-
-                <Input
-                  label="分类 (逗号分隔)"
-                  value={categories()}
-                  onInput={(e) => {
-                    setCategories(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  placeholder="技术, 前端"
-                />
-
-                <Input
-                  label="标签 (逗号分隔)"
-                  value={tags()}
-                  onInput={(e) => {
-                    setTags(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  placeholder="solidjs, shokax"
-                />
-
-                <Input
-                  label="发布日期"
-                  value={date()}
-                  onInput={(e) => {
-                    setDate(e.currentTarget.value);
-                    setDirty(true);
-                  }}
-                  placeholder="YYYY-MM-DD"
-                />
-
-                <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-1">
-                  <input
-                    type="checkbox"
-                    checked={draft()}
-                    onChange={(e) => {
-                      setDraft(e.currentTarget.checked);
+              <Show when={fmMode() === "raw"}>
+                <div class="flex-1 flex flex-col gap-1.5 min-h-0">
+                  <span class="text-[11px] text-[var(--muted)] shrink-0">
+                    YAML 原文（可增删修改任意属性，保存时自动解析）
+                  </span>
+                  <textarea
+                    value={fmRawText()}
+                    onInput={(e) => {
+                      setFmRawText(e.currentTarget.value);
                       setDirty(true);
                     }}
-                    class="rounded text-[var(--accent)]"
+                    spellcheck={false}
+                    class="w-full flex-1 p-2.5 rounded-[4px] border border-[var(--border)] bg-[var(--bg)] font-mono text-xs resize-none overflow-y-auto focus:outline-none focus:border-[var(--accent)] leading-relaxed"
                   />
-                  <span>设为草稿 (Draft)</span>
-                </label>
+                </div>
+              </Show>
 
-                <Show when={extraFields().length > 0}>
-                  <div class="border-t border-[var(--border)] pt-3 mt-1 flex flex-col gap-2.5">
-                    <span class="text-[11px] font-semibold text-[var(--muted)]">
-                      扩展字段 (Astro Schema)
-                    </span>
-                    <For each={extraFields()}>{(f) => renderExtraField(f)}</For>
-                  </div>
-                </Show>
-              </div>
-            </Show>
-          </Card>
+              <Show when={fmMode() === "form"}>
+                <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-3 min-h-0">
+                  <Input
+                    label="文章标题"
+                    value={title()}
+                    onInput={(e) => {
+                      setTitle(e.currentTarget.value);
+                      setDirty(true);
+                    }}
+                    placeholder="文章标题"
+                  />
+
+                  <Input
+                    label="Slug"
+                    value={slug()}
+                    onInput={(e) => {
+                      setSlug(e.currentTarget.value);
+                      setDirty(true);
+                    }}
+                    placeholder="post-slug"
+                  />
+
+                  <Input
+                    label="分类 (逗号分隔)"
+                    value={categories()}
+                    onInput={(e) => {
+                      setCategories(e.currentTarget.value);
+                      setDirty(true);
+                    }}
+                    placeholder="技术, 前端"
+                  />
+
+                  <Input
+                    label="标签 (逗号分隔)"
+                    value={tags()}
+                    onInput={(e) => {
+                      setTags(e.currentTarget.value);
+                      setDirty(true);
+                    }}
+                    placeholder="solidjs, shokax"
+                  />
+
+                  <Input
+                    label="发布日期"
+                    value={date()}
+                    onInput={(e) => {
+                      setDate(e.currentTarget.value);
+                      setDirty(true);
+                    }}
+                    placeholder="YYYY-MM-DD"
+                  />
+
+                  <label class="flex items-center gap-2 text-xs font-medium cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={draft()}
+                      onChange={(e) => {
+                        setDraft(e.currentTarget.checked);
+                        setDirty(true);
+                      }}
+                      class="rounded text-[var(--accent)]"
+                    />
+                    <span>设为草稿 (Draft)</span>
+                  </label>
+
+                  <Show when={extraFields().length > 0}>
+                    <div class="border-t border-[var(--border)] pt-3 mt-1 flex flex-col gap-2.5">
+                      <span class="text-[11px] font-semibold text-[var(--muted)]">
+                        扩展字段 (Astro Schema)
+                      </span>
+                      <For each={extraFields()}>{(f) => renderExtraField(f)}</For>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+            </Card>
+          </Show>
 
           {/* Right Main Editor & Preview Workspace */}
-          <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-3 min-w-0">
             {/* Editor Toolbar */}
-            <div class="surface p-2.5 border border-[var(--border)] rounded-[6px] flex flex-wrap items-center justify-between gap-2 shadow-xs">
+            <div class="surface p-2.5 border border-[var(--border)] rounded-[6px] flex flex-wrap items-center justify-between gap-2 shadow-xs shrink-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <SegmentedControl<Mode>
                   value={mode()}
@@ -697,6 +763,21 @@ export function Editor(): import("solid-js").JSX.Element {
                     { value: "preview", label: "预览", icon: "i-ri-eye-line" },
                   ]}
                 />
+                <Show when={mode() === "split"}>
+                  <button
+                    type="button"
+                    onClick={() => setSyncScroll(!syncScroll())}
+                    title={syncScroll() ? "已开启双向同步滚动（点击切换）" : "已关闭同步滚动（点击切换）"}
+                    class={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors cursor-pointer border ${
+                      syncScroll()
+                        ? "bg-[var(--g-3)] text-[var(--text)] border-[var(--border)] font-medium"
+                        : "bg-[var(--surface)] text-[var(--muted)] border-[var(--border)] hover:text-[var(--text)] hover:bg-[var(--g-2)]"
+                    }`}
+                  >
+                    <span class={syncScroll() ? "i-ri-link-m" : "i-ri-link-unlink-m"} />
+                    <span>{syncScroll() ? "同步滚动" : "独立滚动"}</span>
+                  </button>
+                </Show>
                 <div class="h-4 w-px bg-[var(--border)] mx-1" />
                 <ShokaxToolbar insertText={insertSnippet} />
               </div>
@@ -719,13 +800,13 @@ export function Editor(): import("solid-js").JSX.Element {
             <div
               class={
                 mode() === "split"
-                  ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
+                  ? "grid grid-cols-1 lg:grid-cols-2 gap-3"
                   : "flex flex-col gap-3"
               }
             >
               {(mode() === "split" || mode() === "source") && (
-                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs">
-                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none">
+                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs h-[calc(100vh-14rem)] min-h-[500px]">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none shrink-0">
                     <span>Markdown / MDX 源码</span>
                     <span>{body().length} 字符</span>
                   </div>
@@ -735,7 +816,8 @@ export function Editor(): import("solid-js").JSX.Element {
                     }}
                     value={body()}
                     onInput={(e) => handleSourceInput(e.currentTarget.value)}
-                    class="w-full min-h-[62vh] p-4 bg-[var(--bg)] font-mono text-xs sm:text-sm leading-relaxed resize-y focus:outline-none focus:ring-0 text-[var(--text)] selection:bg-[var(--accent)] selection:text-white"
+                    onScroll={handleEditorScroll}
+                    class="w-full flex-1 p-4 bg-[var(--bg)] font-mono text-xs sm:text-sm leading-relaxed resize-none overflow-y-auto focus:outline-none focus:ring-0 text-[var(--text)] selection:bg-[var(--accent)] selection:text-white"
                     spellcheck={false}
                     placeholder="开始书写 Markdown / MDX 精彩内容..."
                   />
@@ -743,12 +825,18 @@ export function Editor(): import("solid-js").JSX.Element {
               )}
 
               {(mode() === "split" || mode() === "preview") && (
-                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs">
-                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none">
+                <div class="surface border border-[var(--border)] rounded-[6px] overflow-hidden flex flex-col shadow-xs h-[calc(100vh-14rem)] min-h-[500px]">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none shrink-0">
                     <span>ShokaX 实时预览 (Satteri)</span>
                     <span class="text-[10px] text-[var(--ok)]">✓ 已同步渲染</span>
                   </div>
-                  <PreviewMount node={previewNode()} />
+                  <PreviewMount
+                    node={previewNode()}
+                    ref={(el) => {
+                      previewContainerEl = el;
+                    }}
+                    onScroll={handlePreviewScroll}
+                  />
                 </div>
               )}
             </div>
