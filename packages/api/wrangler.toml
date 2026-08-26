@@ -2,6 +2,14 @@ name = "hyacine-api"
 main = "src/index.ts"
 compatibility_date = "2026-08-24"
 
+# 构建与冷启动优化
+minify = true
+upload_source_maps = true
+
+# Smart Placement：自动将 Worker 调度到离 D1 数据库/后端资源更近的节点执行
+[placement]
+mode = "smart"
+
 # 绑定的 id 字段默认【不写】(wrangler>=4.45 自动预置)，避免 local 占位在 deploy 时覆盖真实资源：
 #   - 本地 `wrangler dev --local` 用 miniflare 模拟，不需要 id；
 #   - 远程 `wrangler deploy` 会以本文件为【权威】，覆盖 Worker 上同名的 Dashboard 绑定，
