@@ -301,6 +301,36 @@ describe("sync", () => {
     };
     expect(secondJson.unchangedHashes).toContain(hash);
     expect(secondJson.changedHashes).toHaveLength(0);
+
+    // hash 未变但 slug 更新时（如规则修正）：D1 中的 slug 得到更新
+    const third = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "hello.md",
+            slug: "hello-new-slug",
+            title: "Hello",
+            draft: false,
+            categories: ["test"],
+            hash,
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+    expect(third.status).toBe(200);
+    const listRes = await request(env, "GET", "/api/posts", undefined, token);
+    const listJson = (await listRes.json()) as { posts: { path: string; slug: string }[] };
+    expect(listJson.posts.find((p) => p.path === "hello.md")?.slug).toBe("hello-new-slug");
   });
 
   it("handles deletedPaths", async () => {

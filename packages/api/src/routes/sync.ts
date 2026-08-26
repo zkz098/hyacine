@@ -39,34 +39,31 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     for (const post of input.posts) {
       inputPaths.add(post.path);
       const existing = existingMap.get(post.path);
-      if (existing === undefined || existing.hash !== post.hash) {
-        changedHashes.push(post.hash);
-        const content = post.content ?? null;
-        await c.env.DB.prepare(
-          "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content",
+      const isContentChanged = existing === undefined || existing.hash !== post.hash;
+      const content = post.content ?? null;
+
+      await c.env.DB.prepare(
+        "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=coalesce(excluded.content, posts.content)",
+      )
+        .bind(
+          post.path,
+          post.slug,
+          post.title,
+          post.draft ? 1 : 0,
+          JSON.stringify(post.categories),
+          post.hash,
+          post.createdAt,
+          post.updatedAt,
+          post.lastModified,
+          content,
         )
-          .bind(
-            post.path,
-            post.slug,
-            post.title,
-            post.draft ? 1 : 0,
-            JSON.stringify(post.categories),
-            post.hash,
-            post.createdAt,
-            post.updatedAt,
-            post.lastModified,
-            content,
-          )
-          .run();
-        if (post.content !== undefined) contentByHash.set(post.hash, post.content);
+        .run();
+
+      if (post.content !== undefined) contentByHash.set(post.hash, post.content);
+
+      if (isContentChanged) {
+        changedHashes.push(post.hash);
       } else {
-        // hash 未变：老数据（content 缺失）本次补上，避免「远程 404 / 导出缺行 / AI 无法生成」
-        if (existing.content === null && post.content !== undefined) {
-          await c.env.DB.prepare("UPDATE posts SET content = ?, updated_at = ? WHERE path = ?")
-            .bind(post.content, post.updatedAt, post.path)
-            .run();
-          contentByHash.set(post.hash, post.content);
-        }
         unchangedHashes.push(post.hash);
       }
     }
