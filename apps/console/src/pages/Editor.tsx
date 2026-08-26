@@ -30,10 +30,11 @@ type FmMode = "form" | "raw";
 type SyncState = "offline" | "synced" | "unsynced";
 
 /** 把 satteri 渲染出的 DOM 节点挂到容器里 */
-function PreviewMount(props: {
+export function PreviewMount(props: {
   node: HTMLElement | null | undefined;
   ref?: (el: HTMLDivElement | null) => void;
   onScroll?: (e: Event) => void;
+  class?: string;
 }): import("solid-js").JSX.Element {
   let container: HTMLDivElement | null = null;
   createEffect(() => {
@@ -49,7 +50,7 @@ function PreviewMount(props: {
         props.ref?.(el);
       }}
       onScroll={props.onScroll}
-      class="shokax-preview md flex-1 h-full overflow-y-auto p-4 leading-relaxed"
+      class={`shokax-preview md flex-1 h-full overflow-y-auto p-4 leading-relaxed ${props.class ?? ""}`}
     />
   );
 }

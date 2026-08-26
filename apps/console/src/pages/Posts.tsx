@@ -22,6 +22,10 @@ import {
   TableCell,
 } from "../components/Table";
 import { toast } from "../components/Toast";
+import { renderPreview } from "../editor/preview";
+import { loadEnabledPlugins } from "../editor/syntax/pluginSettings";
+import { parseFrontmatter } from "../lib/frontmatter";
+import { PreviewMount } from "./Editor";
 
 type FilterStatus = "all" | "published" | "draft" | "has_ai" | "no_ai";
 
@@ -44,12 +48,33 @@ export function Posts(): import("solid-js").JSX.Element {
     return res.posts;
   });
 
-  // 远程编辑（Primary 模式）
+  // 远程编辑 / 查看模式
+  type ModalViewMode = "preview" | "source" | "split";
+  const [modalMode, setModalMode] = createSignal<ModalViewMode>("preview");
   const [editingPath, setEditingPath] = createSignal<string | null>(null);
   const [editContent, setEditContent] = createSignal("");
   const [editLoading, setEditLoading] = createSignal(false);
   const [editSaving, setEditSaving] = createSignal(false);
   const [editError, setEditError] = createSignal<string | null>(null);
+
+  const isMdxFile = (): boolean => (editingPath() ?? "").endsWith(".mdx");
+  const previewSource = (): string => {
+    const c = editContent();
+    if (!c) return "";
+    try {
+      return parseFrontmatter(c).content;
+    } catch {
+      return c;
+    }
+  };
+
+  const [previewNode] = createResource(
+    () => [previewSource(), isMdxFile()] as const,
+    ([src, isMdx]) =>
+      renderPreview(src, isMdx, {
+        enabled: loadEnabledPlugins(),
+      }),
+  );
 
   // 立刻生成摘要/嵌入
   const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
@@ -99,6 +124,7 @@ export function Posts(): import("solid-js").JSX.Element {
     setEditingPath(path);
     setEditError(null);
     setEditLoading(true);
+    setModalMode(primaryAvailable() ? "split" : "preview");
     try {
       const res = await apiStore.getClient().getPostContent(path);
       setEditContent(res.content);
@@ -418,7 +444,7 @@ export function Posts(): import("solid-js").JSX.Element {
             ? "修改将直接写入 D1 数据库并同步触发 GitHub 导出任务"
             : "当前为 Replica 模式（只读副本），正文仅供查看与复制，无法在云端直接保存"
         }
-        size="xl"
+        size="full"
         footer={
           <div class="flex items-center justify-between w-full">
             <div class="text-xs text-[var(--muted)]">
@@ -448,7 +474,27 @@ export function Posts(): import("solid-js").JSX.Element {
           </div>
         }
       >
-        <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-3 h-full">
+          {/* Top mode switcher toolbar */}
+          <div class="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-[var(--border)] shrink-0">
+            <SegmentedControl<ModalViewMode>
+              value={modalMode()}
+              onChange={setModalMode}
+              size="xs"
+              items={[
+                { value: "preview", label: "渲染预览", icon: "i-ri-eye-line" },
+                { value: "source", label: "Markdown 源码", icon: "i-ri-code-line" },
+                { value: "split", label: "分栏对照", icon: "i-ri-layout-column-line" },
+              ]}
+            />
+            <Show when={previewNode.loading}>
+              <div class="flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                <Spinner size="xs" />
+                <span>渲染中...</span>
+              </div>
+            </Show>
+          </div>
+
           <Show when={!primaryAvailable()}>
             <Alert variant="info" title="只读模式 (Replica)">
               {t("posts.replicaReadOnlyNotice")}
@@ -460,29 +506,62 @@ export function Posts(): import("solid-js").JSX.Element {
           </Show>
 
           <Show when={editLoading()}>
-            <div class="p-8 flex items-center justify-center gap-2 text-[var(--muted)]">
+            <div class="p-12 flex items-center justify-center gap-2 text-[var(--muted)]">
               <Spinner size="sm" />
               <span>{t("common.loading")}</span>
             </div>
           </Show>
 
           <Show when={!editLoading()}>
-            <textarea
-              value={editContent()}
-              onInput={(e) => {
-                if (primaryAvailable()) {
-                  setEditContent(e.currentTarget.value);
-                }
-              }}
-              readOnly={!primaryAvailable()}
-              spellcheck={false}
-              class={`w-full min-h-[50vh] p-3 rounded-[4px] border border-[var(--border)] text-xs sm:text-sm font-mono leading-relaxed resize-y focus:outline-none ${
-                primaryAvailable()
-                  ? "bg-[var(--bg)] focus:border-[var(--accent)]"
-                  : "bg-[var(--g-1)] text-[var(--text)] cursor-default select-text"
+            <div
+              class={`flex-1 min-h-0 ${
+                modalMode() === "split"
+                  ? "grid grid-cols-1 lg:grid-cols-2 gap-3"
+                  : "flex flex-col gap-3"
               }`}
-              placeholder="文章 Markdown / MDX 源码..."
-            />
+            >
+              {(modalMode() === "split" || modalMode() === "source") && (
+                <div class="flex flex-col rounded-[6px] border border-[var(--border)] bg-[var(--bg)] overflow-hidden shadow-xs h-[58vh]">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none shrink-0">
+                    <span>Markdown / MDX 源码 {primaryAvailable() ? "" : "（只读）"}</span>
+                    <span>{editContent().length} 字符</span>
+                  </div>
+                  <textarea
+                    value={editContent()}
+                    onInput={(e) => {
+                      if (primaryAvailable()) {
+                        setEditContent(e.currentTarget.value);
+                      }
+                    }}
+                    readOnly={!primaryAvailable()}
+                    spellcheck={false}
+                    class={`w-full flex-1 p-3.5 text-xs sm:text-sm font-mono leading-relaxed resize-none overflow-y-auto focus:outline-none ${
+                      primaryAvailable()
+                        ? "bg-[var(--bg)] focus:border-[var(--accent)]"
+                        : "bg-[var(--g-1)] text-[var(--text)] cursor-default select-text"
+                    }`}
+                    placeholder="文章 Markdown / MDX 源码..."
+                  />
+                </div>
+              )}
+
+              {(modalMode() === "split" || modalMode() === "preview") && (
+                <div class="flex flex-col rounded-[6px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-xs h-[58vh]">
+                  <div class="px-3 py-1.5 bg-[var(--g-1)] border-b border-[var(--border)] text-[11px] font-mono text-[var(--muted)] flex items-center justify-between select-none shrink-0">
+                    <span>ShokaX 渲染结果 (Satteri)</span>
+                    <span class="text-[10px] text-[var(--ok)]">✓ 已渲染</span>
+                  </div>
+                  <Show when={previewNode.error}>
+                    <div class="p-3">
+                      <Alert variant="error" title="渲染失败">
+                        {messageOf(previewNode.error)}
+                      </Alert>
+                    </div>
+                  </Show>
+                  <PreviewMount node={previewNode()} class="h-full" />
+                </div>
+              )}
+            </div>
           </Show>
         </div>
       </Modal>
