@@ -81,7 +81,7 @@ export function matchesSelector(node: any, selector: string, ancestors: any[] = 
   const parts = selector.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return false;
 
-  const targetPart = parts[parts.length - 1];
+  const targetPart = parts[parts.length - 1]!;
   if (!matchesSingleElement(node, targetPart)) {
     return false;
   }
@@ -93,7 +93,7 @@ export function matchesSelector(node: any, selector: string, ancestors: any[] = 
   let partIndex = parts.length - 2;
   for (let i = ancestors.length - 1; i >= 0; i--) {
     const ancestor = ancestors[i];
-    if (matchesSingleElement(ancestor, parts[partIndex])) {
+    if (matchesSingleElement(ancestor, parts[partIndex]!)) {
       partIndex--;
       if (partIndex < 0) break;
     }
