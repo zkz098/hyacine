@@ -62,6 +62,12 @@ function parseBool(value: string | undefined, fallback: boolean): boolean {
   return value === "true";
 }
 
+function parseNumber(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** 合并 env 默认值与 D1 覆盖，产出「有效配置」（空串=未配置） */
 export function effectiveConfig(env: Env, overrides: Record<string, string>): CloudConfig {
   return {
@@ -88,6 +94,11 @@ export function effectiveConfig(env: Env, overrides: Record<string, string>): Cl
       accessKeyId: overrides["r2.accessKeyId"] ?? env.R2_ACCESS_KEY_ID ?? "",
       secretAccessKey: overrides["r2.secretAccessKey"] ?? env.R2_SECRET_ACCESS_KEY ?? "",
       bucket: overrides["r2.bucket"] ?? env.R2_BUCKET ?? "",
+    },
+    sync: {
+      boundProjectId: overrides["sync.boundProjectId"] ?? "",
+      maxDeleteRatio: parseNumber(overrides["sync.maxDeleteRatio"], 0.2),
+      maxDeleteLimit: parseNumber(overrides["sync.maxDeleteLimit"], 5),
     },
   };
 }

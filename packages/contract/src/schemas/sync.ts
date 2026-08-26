@@ -17,6 +17,14 @@ export const SyncUploadRequestSchema = z.object({
   assets: z.array(AssetIndexEntrySchema),
   /** 本地已删除（相对上次上行的存量） */
   deletedPaths: z.array(z.string().min(1)).default([]),
+  /** 客户端项目指纹（如 github:owner/repo 或 uuid:...） */
+  projectId: z.string().max(256).optional(),
+  /** 是否强制同步（覆盖安全熔断 / 重绑） */
+  force: z.boolean().optional(),
+  /** 是否请求重绑远程项目身份（需 admin scope） */
+  rebindProject: z.boolean().optional(),
+  /** 是否允许突破大批量删除熔断保护 */
+  allowBatchDelete: z.boolean().optional(),
 });
 
 export type SyncUploadRequest = z.infer<typeof SyncUploadRequestSchema>;

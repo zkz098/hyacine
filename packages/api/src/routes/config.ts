@@ -29,6 +29,11 @@ function toEffective(cfg: ReturnType<typeof effectiveConfig>): EffectiveConfig {
       secretAccessKey: { set: cfg.r2.secretAccessKey.length > 0 },
       bucket: cfg.r2.bucket,
     },
+    sync: {
+      boundProjectId: cfg.sync.boundProjectId,
+      maxDeleteRatio: cfg.sync.maxDeleteRatio,
+      maxDeleteLimit: cfg.sync.maxDeleteLimit,
+    },
   };
 }
 
@@ -77,6 +82,18 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       pairs.push(["r2.accessKeyId", r2.accessKeyId]);
       pairs.push(["r2.secretAccessKey", r2.secretAccessKey]);
       pairs.push(["r2.bucket", r2.bucket]);
+    }
+    const sync = update.sync;
+    if (sync !== undefined) {
+      pairs.push(["sync.boundProjectId", sync.boundProjectId]);
+      pairs.push([
+        "sync.maxDeleteRatio",
+        sync.maxDeleteRatio === undefined ? undefined : String(sync.maxDeleteRatio),
+      ]);
+      pairs.push([
+        "sync.maxDeleteLimit",
+        sync.maxDeleteLimit === undefined ? undefined : String(sync.maxDeleteLimit),
+      ]);
     }
 
     const changed: { key: string; op: "set" | "clear" }[] = [];

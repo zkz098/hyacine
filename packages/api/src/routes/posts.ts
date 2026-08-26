@@ -76,10 +76,11 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
               a.summary, a.summary_model, a.summary_at,
               a.embed_model, a.embed_at, a.embed_vec
        FROM posts p
-       LEFT JOIN ai_results a ON a.hash = p.hash`;
+       LEFT JOIN ai_results a ON a.hash = p.hash
+       WHERE p.deleted_at IS NULL`;
     const params: string[] = [];
     if (prefix.length > 0) {
-      sql += ` WHERE p.path = ? OR p.path LIKE ?`;
+      sql += ` AND (p.path = ? OR p.path LIKE ?)`;
       params.push(prefix, `${prefix}/%`);
     }
     sql += ` ORDER BY datetime(p.updated_at) DESC`;

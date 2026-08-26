@@ -82,4 +82,36 @@ export function resolveProjectConfig(
   return { root, config: loadProjectConfig(root) };
 }
 
+import { execFileSync } from "node:child_process";
+
+export function resolveProjectId(
+  projectRoot: string,
+  config?: ProjectConfig,
+): string | undefined {
+  if (config?.projectId && config.projectId.trim().length > 0) {
+    return config.projectId.trim();
+  }
+  try {
+    const raw = execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (raw.length > 0) {
+      const match = raw.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/i);
+      if (match && match[1] && match[2]) {
+        return `github:${match[1]}/${match[2]}`;
+      }
+      const generic = raw
+        .replace(/^https?:\/\//, "")
+        .replace(/\.git$/, "")
+        .replace(/:/, "/");
+      return `git:${generic}`;
+    }
+  } catch {
+    // 忽略未配置 git 或无 remote
+  }
+  return undefined;
+}
+
 export type { ProjectConfig }; // 重导出共享类型，cli 内引用不变

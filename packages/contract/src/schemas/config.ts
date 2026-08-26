@@ -56,6 +56,21 @@ export const CloudConfigSchema = z.object({
     secretAccessKey: z.string(),
     bucket: z.string(),
   }),
+  /** 同步与安全防线配置 */
+  sync: z
+    .object({
+      /** 已绑定的客户端项目指纹（如 github:owner/repo 或 uuid:...；空=未绑定） */
+      boundProjectId: z.string().default(""),
+      /** 批量删除熔断比例阈值（默认 0.2 即 20%） */
+      maxDeleteRatio: z.number().min(0).max(1).default(0.2),
+      /** 批量删除熔断基数下限（默认 5 篇） */
+      maxDeleteLimit: z.number().int().min(0).default(5),
+    })
+    .default({
+      boundProjectId: "",
+      maxDeleteRatio: 0.2,
+      maxDeleteLimit: 5,
+    }),
 });
 
 export type CloudConfig = z.infer<typeof CloudConfigSchema>;
@@ -81,6 +96,11 @@ export const EffectiveConfigSchema = z.object({
     accessKeyId: z.string(),
     secretAccessKey: SecretInfoSchema,
     bucket: z.string(),
+  }),
+  sync: z.object({
+    boundProjectId: z.string(),
+    maxDeleteRatio: z.number(),
+    maxDeleteLimit: z.number(),
   }),
 });
 
@@ -118,6 +138,14 @@ export const ConfigUpdateRequestSchema = z
       })
       .strict()
       .optional(),
+    sync: z
+      .object({
+        boundProjectId: z.string().max(256).optional(),
+        maxDeleteRatio: z.number().min(0).max(1).optional(),
+        maxDeleteLimit: z.number().int().min(0).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -139,6 +167,9 @@ export const APP_CONFIG_KEYS = [
   "r2.accessKeyId",
   "r2.secretAccessKey",
   "r2.bucket",
+  "sync.boundProjectId",
+  "sync.maxDeleteRatio",
+  "sync.maxDeleteLimit",
 ] as const;
 
 // ---- ProjectConfig（博客项目布局，hyacine.yml） --------------------------
@@ -147,6 +178,8 @@ export const APP_CONFIG_KEYS = [
 export const ProjectCollectionsSchema = z.record(z.string().min(1).max(64), z.string().min(1));
 
 export const ProjectConfigSchema = z.object({
+  /** 项目全局唯一指纹（优先 github:owner/repo 或 uuid:...） */
+  projectId: z.string().min(1).max(256).optional(),
   contentDir: z.string().min(1).default("src/posts"),
   assetsDir: z.string().min(1).default("src/assets"),
   postExtension: z.array(z.string().min(1)).default([".md", ".mdx"]),

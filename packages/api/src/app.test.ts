@@ -372,7 +372,199 @@ describe("sync", () => {
     const delJson = (await delResponse.json()) as { deletedPaths: string[] };
     expect(delJson.deletedPaths).toContain("to-delete.md");
     const fake = getFakeD1(env);
-    expect(fake.posts.has("to-delete.md")).toBe(false);
+    expect(fake.posts.get("to-delete.md")?.deleted_at).toBeTypeOf("string");
+
+    // GET /api/posts 列表应过滤掉该软删除文章
+    const listRes = await request(env, "GET", "/api/posts", undefined, token);
+    const listJson = (await listRes.json()) as { posts: { path: string }[] };
+    expect(listJson.posts.find((p) => p.path === "to-delete.md")).toBeUndefined();
+  });
+
+  it("防线 1：首次同步自动绑定 projectId，指纹不一致时拦截 (409)", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+
+    // 首次同步 project-a
+    const res1 = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "p1.md",
+            slug: "p1",
+            title: "P1",
+            draft: false,
+            categories: [],
+            hash: "a".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+        projectId: "github:user/project-a",
+      },
+      token,
+    );
+    expect(res1.status).toBe(200);
+
+    // 换本地 project-b 同步到同一个云端 -> 拦截 409
+    const res2 = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "p2.md",
+            slug: "p2",
+            title: "P2",
+            draft: false,
+            categories: [],
+            hash: "b".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+        projectId: "github:user/project-b",
+      },
+      token,
+    );
+    expect(res2.status).toBe(409);
+    const errJson = (await res2.json()) as { error: { code: string; message: string } };
+    expect(errJson.error.code).toBe("PROJECT_MISMATCH");
+
+    // 普通写入 token (无 admin scope) 无法强制重绑 -> 403
+    const tokenCreateRes = await request(
+      env,
+      "POST",
+      "/api/auth/tokens",
+      { label: "write-only", scopes: ["posts.w", "posts.r"] },
+      token,
+    );
+    const writeToken = ((await tokenCreateRes.json()) as { token: string }).token;
+    const res3 = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [],
+        assets: [],
+        deletedPaths: [],
+        projectId: "github:user/project-b",
+        force: true,
+        rebindProject: true,
+      },
+      writeToken,
+    );
+    expect(res3.status).toBe(403);
+
+    // Admin Token 携带 force: true 成功重绑 -> 200
+    const res4 = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: [
+          {
+            path: "p2.md",
+            slug: "p2",
+            title: "P2",
+            draft: false,
+            categories: [],
+            hash: "b".repeat(16),
+            createdAt: now,
+            updatedAt: now,
+            lastModified: now,
+          },
+        ],
+        assets: [],
+        deletedPaths: [],
+        projectId: "github:user/project-b",
+        force: true,
+        rebindProject: true,
+      },
+      token,
+    );
+    expect(res4.status).toBe(200);
+  });
+
+  it("防线 2：大批量删除触发安全熔断 (422)", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+
+    // 初始同步 10 篇文章
+    const initialPosts = Array.from({ length: 10 }, (_, i) => ({
+      path: `post-${i}.md`,
+      slug: `post-${i}`,
+      title: `Post ${i}`,
+      draft: false,
+      categories: [],
+      hash: String(i).padStart(16, "0"),
+      createdAt: now,
+      updatedAt: now,
+      lastModified: now,
+    }));
+    await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: initialPosts,
+        assets: [],
+        deletedPaths: [],
+      },
+      token,
+    );
+
+    // 试图一次性删除 6 篇（超过 20% 且超过 5 篇限制） -> 拦截 422
+    const toDelete = ["post-0.md", "post-1.md", "post-2.md", "post-3.md", "post-4.md", "post-5.md"];
+    const resFuse = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: initialPosts.slice(6),
+        assets: [],
+        deletedPaths: toDelete,
+      },
+      token,
+    );
+    expect(resFuse.status).toBe(422);
+    const fuseJson = (await resFuse.json()) as { error: { code: string; message: string } };
+    expect(fuseJson.error.code).toBe("DELETION_THRESHOLD_EXCEEDED");
+
+    // 携带 allowBatchDelete: true 成功放行 -> 200
+    const resAllow = await request(
+      env,
+      "POST",
+      "/api/sync",
+      {
+        generatedAt: now,
+        posts: initialPosts.slice(6),
+        assets: [],
+        deletedPaths: toDelete,
+        allowBatchDelete: true,
+      },
+      token,
+    );
+    expect(resAllow.status).toBe(200);
+    const allowJson = (await resAllow.json()) as { deletedPaths: string[] };
+    expect(allowJson.deletedPaths.length).toBe(6);
   });
 
   it("upserts assets and reports ai.needs", async () => {

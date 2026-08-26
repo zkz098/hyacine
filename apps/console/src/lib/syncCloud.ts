@@ -116,9 +116,17 @@ export interface BuildCloudSyncArgs {
   posts: LocalPostLike[];
   /** 上次上行的 path 集合（用于 deletedPaths 推断；null=不推断） */
   lastPaths?: string[] | null;
+  /** 项目唯一指纹 */
+  projectId?: string;
+  /** 强制同步 */
+  force?: boolean;
+  /** 重绑项目身份（需 admin scope） */
+  rebindProject?: boolean;
+  /** 允许大批量删除突破熔断 */
+  allowBatchDelete?: boolean;
 }
 
-/** 生成可直接交给 client.syncUpload 的 payload：generatedAt + posts + assets + deletedPaths */
+/** 生成可直接交给 client.syncUpload 的 payload：generatedAt + posts + assets + deletedPaths + safety params */
 export async function buildCloudSyncPayload(
   args: BuildCloudSyncArgs,
   io: CloudSyncIO = defaultCloudSyncIO,
@@ -140,5 +148,9 @@ export async function buildCloudSyncPayload(
     posts,
     assets,
     deletedPaths,
+    projectId: args.projectId,
+    force: args.force,
+    rebindProject: args.rebindProject,
+    allowBatchDelete: args.allowBatchDelete,
   };
 }

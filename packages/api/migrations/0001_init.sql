@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS posts (
   hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  last_modified TEXT NOT NULL
+  last_modified TEXT NOT NULL,
+  content TEXT,
+  deleted_at TEXT DEFAULT NULL
 );
 CREATE TABLE IF NOT EXISTS ai_results (
   hash TEXT PRIMARY KEY,

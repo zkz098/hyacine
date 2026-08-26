@@ -12,6 +12,7 @@ interface PostRow {
   updated_at: string;
   last_modified: string;
   content: string | null;
+  deleted_at?: string | null;
 }
 
 interface AiRow {
@@ -154,6 +155,7 @@ export class FakeD1Database {
         existing.hash = hash;
         existing.updated_at = updatedAt;
         existing.last_modified = lastModified;
+        existing.deleted_at = null;
         if (content !== null) existing.content = content;
       } else {
         this.posts.set(path, {
@@ -167,7 +169,17 @@ export class FakeD1Database {
           updated_at: updatedAt,
           last_modified: lastModified,
           content,
+          deleted_at: null,
         });
+      }
+      return;
+    }
+
+    if (lower.startsWith("update posts set deleted_at")) {
+      const [deletedAt, path] = params as [string | null, string];
+      const row = this.posts.get(path);
+      if (row !== undefined) {
+        row.deleted_at = deletedAt;
       }
       return;
     }
@@ -395,7 +407,10 @@ export class FakeD1Database {
 
     if (lower.includes("from posts")) {
       let rows = [...this.posts.values()];
-      if (lower.includes("where path =")) {
+      if (lower.includes("deleted_at is null")) {
+        rows = rows.filter((row) => row.deleted_at === null || row.deleted_at === undefined);
+      }
+      if (lower.includes("where path =") || lower.includes("and path =") || lower.includes("and p.path =")) {
         const [path] = params as [string];
         rows = rows.filter((row) => row.path === path);
       } else if (lower.includes("where hash =")) {

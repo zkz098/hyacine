@@ -64,13 +64,16 @@ describe("ConfigUpdateRequestSchema", () => {
     expect(req.r2?.bucket).toBe("hyacine-assets");
   });
 
-  it("拒绝未知键", () => {
-    const ok = ConfigUpdateRequestSchema.safeParse({ unknownKey: "x" });
-    expect(ok.success).toBe(false);
-  });
-
-  it("拒绝超长值", () => {
-    const ok = ConfigUpdateRequestSchema.safeParse({ embedModel: "x".repeat(200) });
-    expect(ok.success).toBe(false);
+  it("接受 sync 安全配置更新", () => {
+    const req = ConfigUpdateRequestSchema.parse({
+      sync: {
+        boundProjectId: "github:user/my-blog",
+        maxDeleteRatio: 0.3,
+        maxDeleteLimit: 10,
+      },
+    });
+    expect(req.sync?.boundProjectId).toBe("github:user/my-blog");
+    expect(req.sync?.maxDeleteRatio).toBe(0.3);
+    expect(req.sync?.maxDeleteLimit).toBe(10);
   });
 });

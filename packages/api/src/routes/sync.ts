@@ -1,10 +1,9 @@
-// oxlint-disable eslint/no-await-in-loop
 import { Hono } from "hono";
 import { SyncUploadRequestSchema } from "@hyacine/contract";
 import { errorBody, flattenZodError } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
 import { defer } from "../utils/defer";
-import { loadEffectiveConfig } from "../utils/config";
+import { invalidateConfigCache, loadEffectiveConfig } from "../utils/config";
 import { enqueueAiNeeds, processAiQueue } from "../utils/aiQueue";
 import type { AiKind } from "../utils/aiQueue";
 import type { Env, Variables } from "../types";
@@ -18,9 +17,53 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
 
     const input = parsed.data;
+    const cfg = await loadEffectiveConfig(c.env);
 
-    // Load existing posts（带 content：判断「hash 未变但正文缺失」的老数据补 content）
-    const existingResult = await c.env.DB.prepare("SELECT path, hash, content FROM posts").all<{
+    // 防线 1：项目身份校验 (Project Handshake)
+    const boundProject = cfg.sync.boundProjectId.trim();
+    const incomingProject = (input.projectId ?? "").trim();
+
+    if (incomingProject.length > 0) {
+      if (boundProject.length > 0 && boundProject !== incomingProject) {
+        const isRebindRequested = input.rebindProject === true || input.force === true;
+        if (!isRebindRequested) {
+          return c.json(
+            errorBody(
+              "PROJECT_MISMATCH",
+              `项目身份不匹配：当前远程端已绑定项目 [${boundProject}]，而请求来自 [${incomingProject}]。已阻止同步以防止数据被覆盖。若确定需要迁移或覆盖，请使用 --force / --rebind-project 并附带 admin 令牌。`,
+              { boundProjectId: boundProject, incomingProjectId: incomingProject },
+            ),
+            409,
+          );
+        }
+        // 强制重绑需要 admin 权限
+        const scopes = c.get("scopes") ?? [];
+        if (!scopes.includes("admin")) {
+          return c.json(
+            errorBody("forbidden", "强制重绑项目身份需要 admin 权限令牌"),
+            403,
+          );
+        }
+        // 记录新绑定
+        await c.env.DB.prepare(
+          "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        )
+          .bind("sync.boundProjectId", incomingProject, new Date().toISOString())
+          .run();
+        await invalidateConfigCache(c.env);
+      } else if (boundProject.length === 0) {
+        // 首次同步自动绑定
+        await c.env.DB.prepare(
+          "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+        )
+          .bind("sync.boundProjectId", incomingProject, new Date().toISOString())
+          .run();
+        await invalidateConfigCache(c.env);
+      }
+    }
+
+    // Load existing active posts (排除已软删除)
+    const existingResult = await c.env.DB.prepare("SELECT path, hash, content FROM posts WHERE deleted_at IS NULL").all<{
       path: string;
       hash: string;
       content: string | null;
@@ -30,20 +73,55 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       existingMap.set(row.path, { hash: row.hash, content: row.content });
     }
 
+    const inputPaths = new Set<string>();
+    for (const post of input.posts) {
+      inputPaths.add(post.path);
+    }
+
+    // 防线 2：大批量删除熔断 (Blast-Radius Fuse)
+    const candidateDeleted: string[] = [];
+    for (const deleted of input.deletedPaths) {
+      if (existingMap.has(deleted) && !inputPaths.has(deleted)) {
+        candidateDeleted.push(deleted);
+      }
+    }
+
+    const totalExisting = existingMap.size;
+    const deleteLimit = cfg.sync.maxDeleteLimit;
+    const deleteRatio = cfg.sync.maxDeleteRatio;
+    const deleteThreshold = Math.max(deleteLimit, Math.floor(totalExisting * deleteRatio));
+
+    if (
+      totalExisting > deleteLimit &&
+      candidateDeleted.length > deleteThreshold &&
+      input.allowBatchDelete !== true &&
+      input.force !== true
+    ) {
+      return c.json(
+        errorBody(
+          "DELETION_THRESHOLD_EXCEEDED",
+          `大批量删除熔断触发：本次请求试图删除 ${candidateDeleted.length} 篇文章（超过安全阈值 ${deleteThreshold} 篇）。已阻止删除操作以防止数据丢失。若确定需要批量删除，请附带 --allow-batch-delete 或在管理端确认。`,
+          {
+            attemptedDeleteCount: candidateDeleted.length,
+            threshold: deleteThreshold,
+            totalExisting,
+          },
+        ),
+        422,
+      );
+    }
+
     const changedHashes: string[] = [];
     const unchangedHashes: string[] = [];
-    const inputPaths = new Set<string>();
-    // P1: 追踪本次上行带正文的 hash（自动 AI 需要正文）
     const contentByHash = new Map<string, string>();
 
     for (const post of input.posts) {
-      inputPaths.add(post.path);
       const existing = existingMap.get(post.path);
       const isContentChanged = existing === undefined || existing.hash !== post.hash;
       const content = post.content ?? null;
 
       await c.env.DB.prepare(
-        "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=coalesce(excluded.content, posts.content)",
+        "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=coalesce(excluded.content, posts.content), deleted_at=NULL",
       )
         .bind(
           post.path,
@@ -68,26 +146,20 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       }
     }
 
-    // Deleted paths
-    const deletedPaths: string[] = [];
-    for (const deleted of input.deletedPaths) {
-      if (existingMap.has(deleted) && !inputPaths.has(deleted)) {
-        deletedPaths.push(deleted);
-      }
+    // 防线 3：软删除标记 (保留 30 天回收与 ai_results 保护)
+    for (const deleted of candidateDeleted) {
+      await c.env.DB.prepare("UPDATE posts SET deleted_at = ? WHERE path = ?")
+        .bind(new Date().toISOString(), deleted)
+        .run();
     }
-    // 仅当没有任何保留文章引用该 hash 时才清 ai_results，避免两篇同内容
-    // (同 hash) 文章因删一篇而被误删另一篇的 AI 产物
-    const keptHashes = new Set<string>();
-    for (const [path, row] of existingMap) {
-      if (!deletedPaths.includes(path)) keptHashes.add(row.hash);
-    }
-    for (const deleted of deletedPaths) {
-      await c.env.DB.prepare("DELETE FROM posts WHERE path = ?").bind(deleted).run();
-      const hash = existingMap.get(deleted)?.hash;
-      if (hash !== undefined && !keptHashes.has(hash)) {
-        await c.env.DB.prepare("DELETE FROM ai_results WHERE hash = ?").bind(hash).run();
-      }
-    }
+
+    // 自动清理超过 30 天的已软删除老数据
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
+    await c.env.DB.prepare("DELETE FROM posts WHERE deleted_at IS NOT NULL AND deleted_at < ?")
+      .bind(thirtyDaysAgo)
+      .run();
+
+    const deletedPaths = candidateDeleted;
 
     // Assets upsert (is_remote=false entries just登记)
     for (const asset of input.assets) {
@@ -144,7 +216,6 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
 
     // P1 自动 AI 产物：按 autogen 开关对新变更且本次带正文的 hash 入队，内联小额消费
-    const cfg = await loadEffectiveConfig(c.env);
     const toEnqueue: { hash: string; path: string; reason: AiKind }[] = [];
     for (const need of needs) {
       if (!contentByHash.has(need.hash)) continue;

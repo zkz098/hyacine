@@ -5,10 +5,12 @@ import { projectStore } from "../store/project";
 import { isTauri, writeTextFile } from "../tauri/bridge";
 import { buildCloudSyncPayload } from "../lib/syncCloud";
 import { pullExportToLocal } from "../lib/exportPull";
-import { getCollections, type SyncUploadResponse } from "@hyacine/contract";
+import { getCollections, HyacineApiError, type SyncUploadResponse } from "@hyacine/contract";
 import { messageOf } from "../store/errors";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
+import { Input } from "../components/Input";
+import { Modal } from "../components/Modal";
 import { Card, CardHeader, CardTitle, CardDescription } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { PageHeader } from "../components/PageHeader";
@@ -38,6 +40,22 @@ export function Sync(): import("solid-js").JSX.Element {
   const [exporting, setExporting] = createSignal(false);
   const [exportMsg, setExportMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
   const [syncNote, setSyncNote] = createSignal<string | null>(null);
+
+  // 项目不匹配确认弹窗 (防线 1)
+  const [showMismatchModal, setShowMismatchModal] = createSignal(false);
+  const [mismatchInfo, setMismatchInfo] = createSignal<{
+    boundProjectId?: string;
+    incomingProjectId?: string;
+  } | null>(null);
+  const [mismatchConfirmInput, setMismatchConfirmInput] = createSignal("");
+
+  // 大批量删除熔断确认弹窗 (防线 2)
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false);
+  const [deleteInfo, setDeleteInfo] = createSignal<{
+    attemptedDeleteCount?: number;
+    threshold?: number;
+    totalExisting?: number;
+  } | null>(null);
 
   // Primary 可用性
   const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
@@ -72,7 +90,11 @@ export function Sync(): import("solid-js").JSX.Element {
     }
   };
 
-  const handleSyncCloud = async (): Promise<void> => {
+  const handleSyncCloud = async (options?: {
+    force?: boolean;
+    rebindProject?: boolean;
+    allowBatchDelete?: boolean;
+  }): Promise<void> => {
     setSyncing(true);
     setSyncError(null);
     setLastResult(null);
@@ -81,6 +103,7 @@ export function Sync(): import("solid-js").JSX.Element {
       const dir = projectStore.getProjectDir();
       const cfg = projectStore.projectConfig();
       const posts = projectStore.posts();
+      const pId = projectStore.getProjectId();
       if (dir === null || cfg === null) {
         throw new Error("未选择博客目录，请先在「工作台」打开项目");
       }
@@ -103,12 +126,19 @@ export function Sync(): import("solid-js").JSX.Element {
         assetsDir: cfg.assetsDir,
         posts,
         lastPaths,
+        projectId: pId ?? undefined,
+        force: options?.force,
+        rebindProject: options?.rebindProject,
+        allowBatchDelete: options?.allowBatchDelete,
       });
 
       const client = apiStore.getClient();
       const res = await client.syncUpload(payload);
       setLastResult(res);
       setSyncNote(null);
+      setShowMismatchModal(false);
+      setShowDeleteModal(false);
+      setMismatchConfirmInput("");
       toast.success(
         `文章: ${res.accepted.posts}, 资产: ${res.accepted.assets}, 变更: ${res.changedHashes.length}, 删除: ${res.deletedPaths.length}`,
         "同步上行成功",
@@ -132,6 +162,36 @@ export function Sync(): import("solid-js").JSX.Element {
       }
       await refetch();
     } catch (err: unknown) {
+      if (err instanceof HyacineApiError) {
+        if (err.code === "PROJECT_MISMATCH" || err.status === 409) {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          const details = err.details as
+            | { boundProjectId?: string; incomingProjectId?: string }
+            | undefined;
+          setMismatchInfo({
+            boundProjectId: details?.boundProjectId ?? "已绑定项目",
+            incomingProjectId:
+              details?.incomingProjectId ?? projectStore.getProjectId() ?? "当前本地项目",
+          });
+          setShowMismatchModal(true);
+          setSyncError(err.message);
+          return;
+        }
+        if (err.code === "DELETION_THRESHOLD_EXCEEDED" || err.status === 422) {
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          const details = err.details as
+            | { attemptedDeleteCount?: number; threshold?: number; totalExisting?: number }
+            | undefined;
+          setDeleteInfo({
+            attemptedDeleteCount: details?.attemptedDeleteCount,
+            threshold: details?.threshold,
+            totalExisting: details?.totalExisting,
+          });
+          setShowDeleteModal(true);
+          setSyncError(err.message);
+          return;
+        }
+      }
       setSyncError(messageOf(err));
       toast.error(messageOf(err), "同步云端失败");
     } finally {
@@ -210,6 +270,20 @@ export function Sync(): import("solid-js").JSX.Element {
           </div>
         </CardDescription>
       </Card>
+
+      {/* Project Fingerprint Banner */}
+      <div class="flex items-center justify-between p-3 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] text-xs">
+        <div class="flex items-center gap-2">
+          <span class="i-ri-fingerprint-line text-[var(--accent)] text-base" />
+          <span class="text-[var(--muted)]">本地项目指纹 (用于云端防覆盖校验):</span>
+          <code class="font-mono font-medium text-[var(--text)] bg-[var(--g-1)] px-1.5 py-0.5 rounded">
+            {projectStore.getProjectId() ?? "未检测到 (将使用默认项目绑定)"}
+          </code>
+        </div>
+        <Badge variant="neutral" size="sm">
+          四道防线已启用
+        </Badge>
+      </div>
 
       <Show when={syncError()}>
         <Alert variant="error" title="同步失败">
@@ -326,6 +400,102 @@ export function Sync(): import("solid-js").JSX.Element {
           </div>
         )}
       </Show>
+
+      {/* 防线 1：项目身份不匹配确认弹窗 */}
+      <Modal
+        open={showMismatchModal()}
+        onClose={() => setShowMismatchModal(false)}
+        title="⚠️ 项目身份不匹配警告 (防跨项目覆盖)"
+        description="检测到当前连接的云端环境已绑定到另一个项目。继续同步将重绑项目指纹并可能覆盖线上数据。"
+        size="md"
+        footer={
+          <div class="flex items-center justify-end gap-2 w-full">
+            <Button variant="outline" size="sm" onClick={() => setShowMismatchModal(false)}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={syncing()}
+              disabled={
+                mismatchConfirmInput().trim() !== (mismatchInfo()?.incomingProjectId ?? "").trim()
+              }
+              onClick={() => void handleSyncCloud({ force: true, rebindProject: true })}
+              icon="i-ri-error-warning-line"
+            >
+              确认强制重绑与覆盖
+            </Button>
+          </div>
+        }
+      >
+        <div class="flex flex-col gap-4">
+          <Alert variant="error">
+            <div class="flex flex-col gap-1 text-xs">
+              <div>
+                <strong>云端绑定项目：</strong>
+                <code class="font-mono bg-[var(--g-1)] px-1 rounded">
+                  {mismatchInfo()?.boundProjectId}
+                </code>
+              </div>
+              <div>
+                <strong>当前本地项目：</strong>
+                <code class="font-mono bg-[var(--g-1)] px-1 rounded">
+                  {mismatchInfo()?.incomingProjectId}
+                </code>
+              </div>
+            </div>
+          </Alert>
+          <div class="text-xs text-[var(--muted)] leading-relaxed">
+            为防止误选本地目录导致线上数据被污染或意外覆盖，系统已自动拦截本次同步。
+            <br />
+            若您正在执行合法的项目迁移或灾难恢复，且当前使用的 API Token 具备 <strong>admin</strong> 权限，请在下方输入当前本地项目指纹{" "}
+            <code class="font-mono text-[var(--text)] font-semibold">
+              {mismatchInfo()?.incomingProjectId}
+            </code>{" "}
+            以解锁强制重绑操作：
+          </div>
+          <Input
+            value={mismatchConfirmInput()}
+            onInput={setMismatchConfirmInput}
+            placeholder={`输入 ${mismatchInfo()?.incomingProjectId ?? ""} 以确认`}
+            size="sm"
+          />
+        </div>
+      </Modal>
+
+      {/* 防线 2：大批量删除熔断保护弹窗 */}
+      <Modal
+        open={showDeleteModal()}
+        onClose={() => setShowDeleteModal(false)}
+        title="⚠️ 大批量删除熔断保护"
+        description="本次同步触发了大批量文章删除保护机制。"
+        size="md"
+        footer={
+          <div class="flex items-center justify-end gap-2 w-full">
+            <Button variant="outline" size="sm" onClick={() => setShowDeleteModal(false)}>
+              取消同步
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={syncing()}
+              onClick={() => void handleSyncCloud({ allowBatchDelete: true })}
+              icon="i-ri-delete-bin-line"
+            >
+              确认批量删除并同步
+            </Button>
+          </div>
+        }
+      >
+        <div class="flex flex-col gap-3">
+          <Alert variant="warning">
+            本次同步试图从云端删除 <strong>{deleteInfo()?.attemptedDeleteCount}</strong> 篇文章（已超过单次安全删除阈值 {deleteInfo()?.threshold} 篇）。
+          </Alert>
+          <div class="text-xs text-[var(--muted)] leading-relaxed">
+            删除后的文章将在云端进入 30 天软删除回收期，不会立即销毁 AI 产物。如果您确定在本地删除了这些文章并希望同步下架，请点击下方确认按钮。
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

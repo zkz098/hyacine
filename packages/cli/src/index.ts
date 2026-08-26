@@ -5,7 +5,7 @@ import { basename, dirname, extname, join, relative } from "node:path";
 import { Command } from "commander";
 import matter from "gray-matter";
 import { HyacineClient, HyacineApiError } from "@hyacine/contract";
-import { findProjectRoot, loadProjectConfig } from "./config/project";
+import { findProjectRoot, loadProjectConfig, resolveProjectId } from "./config/project";
 import { loadRemoteState, saveRemoteState, isRemoteConfigured } from "./remote/state";
 import { t } from "./i18n";
 import { autoSlug } from "@hyacine/contract";
@@ -65,6 +65,14 @@ function handleApiError(err: unknown): never {
       console.error(t("error.network"));
     } else if (err.code === "unauthorized" || err.status === 401) {
       console.error(t("error.unauthorized"));
+    } else if (err.code === "PROJECT_MISMATCH" || err.status === 409) {
+      console.error(`\x1b[31m[项目身份不匹配 (409 Conflict)]\x1b[0m ${err.message}`);
+      console.error(`\x1b[33m提示：如确定需要将当前本地项目绑定并覆盖远程，请执行：\x1b[0m`);
+      console.error(`  hyc sync --force --rebind-project （需持有 admin 权限令牌）`);
+    } else if (err.code === "DELETION_THRESHOLD_EXCEEDED" || err.status === 422) {
+      console.error(`\x1b[31m[大批量删除熔断保护 (422)]\x1b[0m ${err.message}`);
+      console.error(`\x1b[33m提示：如确定需要批量下架/删除这些文章，请执行：\x1b[0m`);
+      console.error(`  hyc sync --allow-batch-delete`);
     } else {
       console.error(`${err.code}: ${err.message}`);
     }
@@ -540,47 +548,57 @@ program
 // ---- sync ----
 program
   .command("sync")
+  .option("--force", "force sync (bypass safety checks)")
+  .option("--rebind-project", "rebind remote project identity (requires admin scope)")
+  .option("--allow-batch-delete", "allow deleting posts exceeding safety threshold")
   .description("sync index to remote")
-  .action(async () => {
-    if (!isRemoteMode()) {
-      console.error(t("error.remoteOnly"));
-      process.exit(1);
-    }
-    const { root, config } = getProjectInfo();
-    const state = loadRemoteState();
-    const lastPaths = state.lastSync?.paths ?? null;
-    const { posts, assets, deletedPaths } = buildSyncPayload(root, config, lastPaths);
-    const payload = {
-      generatedAt: new Date().toISOString(),
-      posts,
-      assets,
-      deletedPaths,
-    };
-    try {
-      const client = getClient();
-      const res = await client.syncUpload(payload);
-      console.log(
-        t("sync.uploaded", {
-          posts: String(res.accepted.posts),
-          assets: String(res.accepted.assets),
-          changed: String(res.changedHashes.length),
-          deleted: String(res.deletedPaths.length),
-        }),
-      );
-      console.log(t("sync.needs", { count: String(res.ai.needs.length) }));
-      if (res.ai.needs.length > 0) {
-        for (const n of res.ai.needs) {
-          console.log(`  ${n.path}: ${n.reason}`);
-        }
+  .action(
+    async (opts: { force?: boolean; rebindProject?: boolean; allowBatchDelete?: boolean }) => {
+      if (!isRemoteMode()) {
+        console.error(t("error.remoteOnly"));
+        process.exit(1);
       }
-      saveRemoteState({
-        ...state,
-        lastSync: { at: new Date().toISOString(), paths: posts.map((p) => p.path) },
-      });
-    } catch (err) {
-      handleApiError(err);
-    }
-  });
+      const { root, config } = getProjectInfo();
+      const state = loadRemoteState();
+      const lastPaths = state.lastSync?.paths ?? null;
+      const { posts, assets, deletedPaths } = buildSyncPayload(root, config, lastPaths);
+      const projectId = resolveProjectId(root, config);
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        posts,
+        assets,
+        deletedPaths,
+        projectId,
+        force: opts.force,
+        rebindProject: opts.rebindProject,
+        allowBatchDelete: opts.allowBatchDelete,
+      };
+      try {
+        const client = getClient();
+        const res = await client.syncUpload(payload);
+        console.log(
+          t("sync.uploaded", {
+            posts: String(res.accepted.posts),
+            assets: String(res.accepted.assets),
+            changed: String(res.changedHashes.length),
+            deleted: String(res.deletedPaths.length),
+          }),
+        );
+        console.log(t("sync.needs", { count: String(res.ai.needs.length) }));
+        if (res.ai.needs.length > 0) {
+          for (const n of res.ai.needs) {
+            console.log(`  ${n.path}: ${n.reason}`);
+          }
+        }
+        saveRemoteState({
+          ...state,
+          lastSync: { at: new Date().toISOString(), paths: posts.map((p) => p.path) },
+        });
+      } catch (err) {
+        handleApiError(err);
+      }
+    },
+  );
 
 // ---- ai:summary ----
 program

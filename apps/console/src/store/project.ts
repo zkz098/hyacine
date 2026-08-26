@@ -9,7 +9,7 @@ import {
   type ProjectConfig,
 } from "@hyacine/contract";
 import { displaySlug } from "@hyacine/contract";
-import { isTauri, readDirRecursive, readTextFile } from "../tauri/bridge";
+import { isTauri, readDirRecursive, readTextFile, gitExec } from "../tauri/bridge";
 import { parseFrontmatter } from "../lib/frontmatter";
 import { postBodyHash } from "../lib/postHash";
 
@@ -31,11 +31,41 @@ export interface LocalPostInfo {
 
 const [projectDir, setProjectDir] = createSignal<string | null>(null);
 const [projectConfig, setProjectConfig] = createSignal<ProjectConfig | null>(null);
+const [projectId, setProjectId] = createSignal<string | null>(null);
 /** hyc collections 产物（集合 schema + ui 字段描述；可为 null=未生成） */
 const [collectionsFile, setCollectionsFile] = createSignal<CollectionsFile | null>(null);
 const [posts, setPosts] = createSignal<LocalPostInfo[]>([]);
 const [loading, setLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
+
+export async function detectProjectId(
+  dir: string,
+  config?: ProjectConfig | null,
+): Promise<string | null> {
+  if (config?.projectId && config.projectId.trim().length > 0) {
+    return config.projectId.trim();
+  }
+  if (isTauri()) {
+    try {
+      const res = await gitExec(["remote", "get-url", "origin"], dir);
+      if (res.code === 0 && res.stdout.trim().length > 0) {
+        const raw = res.stdout.trim();
+        const match = raw.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/i);
+        if (match && match[1] && match[2]) {
+          return `github:${match[1]}/${match[2]}`;
+        }
+        const generic = raw
+          .replace(/^https?:\/\//, "")
+          .replace(/\.git$/, "")
+          .replace(/:/, "/");
+        return `git:${generic}`;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
 
 async function loadConfig(dir: string): Promise<ProjectConfig> {
   const candidates = [`${dir}/hyacine.yml`, `${dir}/hyacine.yaml`];
@@ -96,9 +126,14 @@ export async function openProject(dir: string): Promise<void> {
   if (!isTauri()) throw new Error("require_tauri");
   setProjectDir(dir);
   setError(null);
-  const [cfg, collections] = await Promise.all([loadConfig(dir), loadCollectionsFile(dir)]);
+  const [cfg, collections, detectedId] = await Promise.all([
+    loadConfig(dir),
+    loadCollectionsFile(dir),
+    detectProjectId(dir, null),
+  ]);
   setProjectConfig(cfg);
   setCollectionsFile(collections);
+  setProjectId(cfg.projectId ?? detectedId);
   await refreshPosts();
 }
 
@@ -183,10 +218,15 @@ export function getProjectDir(): string | null {
   return projectDir();
 }
 
+export function getProjectId(): string | null {
+  return projectId();
+}
+
 export function useProject() {
   return {
     projectDir,
     projectConfig,
+    projectId,
     collectionsFile,
     posts,
     loading,
@@ -194,12 +234,14 @@ export function useProject() {
     openProject,
     refreshPosts,
     setProjectDir,
+    setProjectId,
   };
 }
 
 export const projectStore = {
   projectDir,
   projectConfig,
+  projectId,
   collectionsFile,
   posts,
   loading,
@@ -207,4 +249,5 @@ export const projectStore = {
   openProject,
   refreshPosts,
   getProjectDir,
+  getProjectId,
 };

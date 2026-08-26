@@ -75,7 +75,7 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     const now = new Date().toISOString();
 
     await c.env.DB.prepare(
-      "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content",
+      "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content, deleted_at=NULL",
     )
       .bind(
         path,
@@ -136,7 +136,7 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     if (path.length === 0) {
       return c.json(errorBody("validation_error", "缺少 path 参数"), 400);
     }
-    const row = await c.env.DB.prepare("SELECT content FROM posts WHERE path = ?")
+    const row = await c.env.DB.prepare("SELECT content FROM posts WHERE path = ? AND deleted_at IS NULL")
       .bind(path)
       .first<{ content: string | null }>();
     if (row === null || row === undefined || row.content === null) {
@@ -147,7 +147,7 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
 
   app.get("/api/export", authMiddleware(["posts.r"]), async (c) => {
     const result = await c.env.DB.prepare(
-      "SELECT path, content FROM posts WHERE content IS NOT NULL AND content != '' ORDER BY path",
+      "SELECT path, content FROM posts WHERE deleted_at IS NULL AND content IS NOT NULL AND content != '' ORDER BY path",
     ).all<{ path: string; content: string | null }>();
     const posts = (result.results ?? [])
       .filter((row) => row.content !== null)
