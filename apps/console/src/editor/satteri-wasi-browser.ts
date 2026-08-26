@@ -1,3 +1,4 @@
+// oxlint-disable eslint/no-underscore-dangle
 /**
  * satteri 浏览器(WASI)绑定修补版。
  *

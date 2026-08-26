@@ -5,7 +5,8 @@
   "description": "hyacine API — Hono on Cloudflare Workers",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "oxlint -A all --type-aware --type-check .",
+    "typecheck:tsc": "tsc --noEmit",
     "test": "vitest run",
     "dev": "wrangler dev --port 8787 --local",
     "smoke": "node scripts/smoke.mjs",

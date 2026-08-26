@@ -7,6 +7,7 @@ export default defineConfig({
     perf: "warn",
   },
   rules: {
+    "unicorn/consistent-function-scoping": "off",
     "no-underscore-dangle": [
       "error",
       {

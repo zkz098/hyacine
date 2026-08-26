@@ -19,6 +19,7 @@ declare module "@napi-rs/wasm-runtime" {
     // oxlint-disable-next-line @typescript-eslint/no-explicit-any -- 见上
     options: any,
   ): Promise<{ instance: any; module: any; napiModule: { exports: any } }>;
+  // oxlint-disable-next-line typescript/no-extraneous-class
   export class WASI {
     constructor(options?: { version?: string });
   }

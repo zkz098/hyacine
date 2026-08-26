@@ -18,7 +18,8 @@
   },
   "scripts": {
     "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "oxlint -A all --type-aware --type-check .",
+    "typecheck:tsc": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {

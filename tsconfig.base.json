@@ -18,6 +18,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noUncheckedSideEffectImports": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "paths": {
+      "@hyacine/contract": ["./packages/contract/src/index.ts"],
+      "@hyacine/sdk": ["./packages/sdk/src/index.ts"],
+      "@hyacine/sdk/*": ["./packages/sdk/src/*/index.ts", "./packages/sdk/src/*.ts"]
+    }
   }
 }

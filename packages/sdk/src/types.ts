@@ -1,4 +1,4 @@
-import type { PostListItem } from "@hyacine/contract";
+export type { PostListItem } from "@hyacine/contract";
 
 export interface HyacineSdkOptions {
   apiUrl: string;
