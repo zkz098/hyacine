@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show } from "solid-js";
+import { createMemo, createResource, createSignal, For, Show } from "solid-js";
 import { t } from "../i18n";
 import { apiStore } from "../store/api";
 import { messageOf } from "../store/errors";
@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { Tabs } from "../components/Tabs";
 import {
   TableContainer,
   Table,
@@ -21,8 +22,59 @@ import {
   TableCell,
 } from "../components/Table";
 import { toast } from "../components/Toast";
+import type { AssetIndexEntry, AssetType } from "@hyacine/contract";
 
+export type AssetCategory = "all" | "image" | "audio" | "video" | "font" | "other";
 type ViewMode = "grid" | "table";
+
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "avif", "gif", "svg", "bmp", "ico"]);
+const FONT_EXTS = new Set(["ttf", "otf", "woff", "woff2", "eot"]);
+const VIDEO_EXTS = new Set(["mp4", "webm", "mov", "mkv", "avi", "flv", "wmv"]);
+const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "flac", "aac", "m4a", "wma", "opus"]);
+
+export function resolveAssetCategory(asset: {
+  assetType?: string;
+  fileType?: string;
+  path?: string;
+}): AssetType {
+  if (
+    asset.assetType === "image" ||
+    asset.assetType === "audio" ||
+    asset.assetType === "video" ||
+    asset.assetType === "font"
+  ) {
+    return asset.assetType;
+  }
+  const mime = (asset.fileType ?? "").toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("audio/")) return "audio";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("font/") || mime.includes("font") || mime.includes("opentype")) return "font";
+
+  const path = asset.path ?? "";
+  const ext = path.includes(".") ? (path.split(".").pop() ?? "").toLowerCase() : "";
+  if (IMAGE_EXTS.has(ext)) return "image";
+  if (AUDIO_EXTS.has(ext)) return "audio";
+  if (VIDEO_EXTS.has(ext)) return "video";
+  if (FONT_EXTS.has(ext)) return "font";
+  return "other";
+}
+
+const CATEGORY_CONFIG: Record<
+  AssetType,
+  {
+    label: string;
+    icon: string;
+    badgeVariant: "success" | "warning" | "danger" | "primary" | "neutral";
+    dir: string;
+  }
+> = {
+  image: { label: "图片", icon: "i-ri-image-line", badgeVariant: "success", dir: "images" },
+  audio: { label: "音频", icon: "i-ri-music-2-line", badgeVariant: "warning", dir: "audio" },
+  video: { label: "视频", icon: "i-ri-video-line", badgeVariant: "danger", dir: "video" },
+  font: { label: "字体", icon: "i-ri-font-size", badgeVariant: "primary", dir: "fonts" },
+  other: { label: "其他", icon: "i-ri-file-3-line", badgeVariant: "neutral", dir: "assets" },
+};
 
 function formatBytes(bytes?: number | null): string {
   if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return "—";
@@ -34,6 +86,7 @@ function formatBytes(bytes?: number | null): string {
 export function Assets(): import("solid-js").JSX.Element {
   const [uploading, setUploading] = createSignal(false);
   const [uploadError, setUploadError] = createSignal<string | null>(null);
+  const [activeCategory, setActiveCategory] = createSignal<AssetCategory>("all");
   const [viewMode, setViewMode] = createSignal<ViewMode>("grid");
   const [search, setSearch] = createSignal("");
 
@@ -43,13 +96,35 @@ export function Assets(): import("solid-js").JSX.Element {
     return res.assets;
   });
 
+  const categoryCounts = createMemo(() => {
+    const list = assets() ?? [];
+    const counts: Record<AssetCategory, number> = {
+      all: list.length,
+      image: 0,
+      audio: 0,
+      video: 0,
+      font: 0,
+      other: 0,
+    };
+    for (const a of list) {
+      const cat = resolveAssetCategory(a);
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    }
+    return counts;
+  });
+
   const handleUpload = async (file: File): Promise<void> => {
     setUploading(true);
     setUploadError(null);
     try {
+      const ext = file.name.includes(".") ? (file.name.split(".").pop() ?? "").toLowerCase() : "";
+      const cat = resolveAssetCategory({ fileType: file.type, path: file.name });
+      const dir = CATEGORY_CONFIG[cat]?.dir ?? "assets";
+      const key = `${dir}/${file.name}`;
+
       const client = apiStore.getClient();
       const presign = await client.presign({
-        key: `images/${file.name}`,
+        key,
         contentType: file.type || "application/octet-stream",
         size: file.size,
       });
@@ -64,9 +139,9 @@ export function Assets(): import("solid-js").JSX.Element {
         throw new Error(`上传失败 ${String(putResponse.status)}${hint}`);
       }
       await client.registerAsset({
-        path: `images/${file.name}`,
-        assetType: "image",
-        fileType: file.type || "application/octet-stream",
+        path: key,
+        assetType: cat,
+        fileType: file.type || ext || "application/octet-stream",
         r2Key: presign.key,
         size: file.size,
       });
@@ -80,10 +155,30 @@ export function Assets(): import("solid-js").JSX.Element {
     }
   };
 
-  const copyMarkdown = async (path: string): Promise<void> => {
-    const md = `![${path}](/${path})`;
-    await navigator.clipboard.writeText(md);
-    toast.success(md, "已复制 Markdown 图片标签");
+  const copyTag = async (asset: AssetIndexEntry): Promise<void> => {
+    const cat = resolveAssetCategory(asset);
+    let tag = "";
+    if (cat === "image") {
+      tag = `![${asset.path}](/${asset.path})`;
+      await navigator.clipboard.writeText(tag);
+      toast.success(tag, "已复制 Markdown 图片标签");
+    } else if (cat === "audio") {
+      tag = `<audio controls src="/${asset.path}"></audio>`;
+      await navigator.clipboard.writeText(tag);
+      toast.success(tag, "已复制音频播放标签");
+    } else if (cat === "video") {
+      tag = `<video controls src="/${asset.path}"></video>`;
+      await navigator.clipboard.writeText(tag);
+      toast.success(tag, "已复制视频播放标签");
+    } else if (cat === "font") {
+      tag = `url('/${asset.path}')`;
+      await navigator.clipboard.writeText(tag);
+      toast.success(tag, "已复制字体 CSS 路径");
+    } else {
+      tag = `[${asset.path}](/${asset.path})`;
+      await navigator.clipboard.writeText(tag);
+      toast.success(tag, "已复制 Markdown 链接");
+    }
   };
 
   const copyPath = async (path: string): Promise<void> => {
@@ -91,19 +186,37 @@ export function Assets(): import("solid-js").JSX.Element {
     toast.success(`/${path}`, "已复制路径");
   };
 
-  const filteredAssets = (): ReturnType<typeof assets> => {
+  const filteredAssets = createMemo(() => {
     const list = assets();
     if (!list) return undefined;
+    const cat = activeCategory();
     const q = search().toLowerCase().trim();
-    if (q.length === 0) return list;
-    return list.filter((a) => a.path.toLowerCase().includes(q) || a.r2Key?.toLowerCase().includes(q));
+
+    return list.filter((a) => {
+      if (cat !== "all" && resolveAssetCategory(a) !== cat) {
+        return false;
+      }
+      if (q.length > 0) {
+        return a.path.toLowerCase().includes(q) || a.r2Key?.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  });
+
+  // 严格控制：非 image 分类只能列表查看；image 分类支持图库与列表切换
+  const isImageOrAll = () => activeCategory() === "image" || activeCategory() === "all";
+  const effectiveViewMode = () => {
+    if (activeCategory() !== "image" && activeCategory() !== "all") {
+      return "table";
+    }
+    return viewMode();
   };
 
   return (
     <div class="flex flex-col gap-6">
       <PageHeader
         title={t("assets.title")}
-        description="管理存储在 Cloudflare R2 对象存储中的静态图片与多媒体资产"
+        description="管理存储在 Cloudflare R2 对象存储中的静态图片、音视频与字体等多媒体资产"
         badge={
           <Show when={assets()}>
             <Badge variant="neutral">共 {assets()?.length ?? 0} 个资产</Badge>
@@ -122,7 +235,6 @@ export function Assets(): import("solid-js").JSX.Element {
               <input
                 type="file"
                 class="hidden"
-                accept="image/*"
                 disabled={uploading()}
                 onChange={(e) => {
                   const file = e.currentTarget.files?.[0];
@@ -151,6 +263,28 @@ export function Assets(): import("solid-js").JSX.Element {
         </Alert>
       </Show>
 
+      {/* Category Tabs */}
+      <Tabs
+        activeKey={activeCategory()}
+        onChange={(k) => {
+          const next = k as AssetCategory;
+          setActiveCategory(next);
+          if (next !== "image" && next !== "all") {
+            setViewMode("table");
+          }
+        }}
+        items={[
+          { key: "all", label: "全部", icon: "i-ri-apps-2-line", count: categoryCounts().all },
+          { key: "image", label: "图片", icon: "i-ri-image-line", count: categoryCounts().image },
+          { key: "audio", label: "音频", icon: "i-ri-music-2-line", count: categoryCounts().audio },
+          { key: "video", label: "视频", icon: "i-ri-video-line", count: categoryCounts().video },
+          { key: "font", label: "字体", icon: "i-ri-font-size", count: categoryCounts().font },
+          ...(categoryCounts().other > 0
+            ? [{ key: "other", label: "其他", icon: "i-ri-file-3-line", count: categoryCounts().other }]
+            : []),
+        ]}
+      />
+
       {/* Filter and View Switcher Bar */}
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[var(--surface)] p-3 border border-[var(--border)] rounded-[6px]">
         <Input
@@ -161,15 +295,25 @@ export function Assets(): import("solid-js").JSX.Element {
           containerClass="max-w-xs flex-1"
         />
 
-        <SegmentedControl<ViewMode>
-          value={viewMode()}
-          onChange={setViewMode}
-          size="sm"
-          items={[
-            { value: "grid", label: "网格图库", icon: "i-ri-layout-grid-line" },
-            { value: "table", label: "列表", icon: "i-ri-list-check" },
-          ]}
-        />
+        <Show
+          when={isImageOrAll()}
+          fallback={
+            <div class="flex items-center gap-1.5 text-xs text-[var(--muted)] px-2.5 py-1.5 bg-[var(--g-2)] rounded-[4px] border border-[var(--border)] self-start sm:self-auto select-none">
+              <span class="i-ri-list-check text-sm" />
+              <span>当前分类仅支持列表查看</span>
+            </div>
+          }
+        >
+          <SegmentedControl<ViewMode>
+            value={viewMode()}
+            onChange={setViewMode}
+            size="sm"
+            items={[
+              { value: "grid", label: "网格图库", icon: "i-ri-layout-grid-line" },
+              { value: "table", label: "列表", icon: "i-ri-list-check" },
+            ]}
+          />
+        </Show>
       </div>
 
       <Show when={assets.error}>
@@ -191,32 +335,45 @@ export function Assets(): import("solid-js").JSX.Element {
             when={list().length > 0}
             fallback={
               <EmptyState
-                icon="i-ri-image-line"
-                title={assets()?.length === 0 ? t("assets.empty") : "无匹配资产"}
+                icon={
+                  activeCategory() === "all"
+                    ? "i-ri-folder-open-line"
+                    : CATEGORY_CONFIG[activeCategory() as AssetType]?.icon ?? "i-ri-file-3-line"
+                }
+                title={
+                  assets()?.length === 0
+                    ? t("assets.empty")
+                    : `暂无${activeCategory() === "all" ? "" : CATEGORY_CONFIG[activeCategory() as AssetType]?.label ?? ""}资产`
+                }
                 description={
                   assets()?.length === 0
-                    ? "点击右上角「上传」把图片上传到 Cloudflare R2 存储"
-                    : "请尝试更换搜索关键字"
+                    ? "点击右上角「上传」把多媒体资产上传到 Cloudflare R2 存储"
+                    : "请尝试切换分类或更换搜索关键字"
                 }
               />
             }
           >
-            {/* View Mode: Grid (Gallery) */}
-            <Show when={viewMode() === "grid"}>
+            {/* View Mode: Grid (Gallery) - 仅图片分类或全部下以卡片形式展示 */}
+            <Show when={effectiveViewMode() === "grid"}>
               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <For each={list()}>
                   {(asset) => {
-                    const isImg = asset.assetType === "image" || asset.fileType?.startsWith("image/");
+                    const cat = resolveAssetCategory(asset);
+                    const isImg = cat === "image";
+                    const meta = CATEGORY_CONFIG[cat];
+
                     return (
                       <Card hoverable class="flex flex-col justify-between p-0 overflow-hidden group">
-                        {/* Image Preview / Thumbnail Box */}
+                        {/* Preview / Thumbnail Box */}
                         <div class="h-40 bg-[var(--g-2)] relative flex items-center justify-center overflow-hidden border-b border-[var(--border)]">
                           <Show
                             when={isImg}
                             fallback={
                               <div class="flex flex-col items-center gap-1 text-[var(--muted)]">
-                                <span class="i-ri-file-3-line text-4xl" />
-                                <span class="text-[11px] uppercase font-mono">{asset.fileType}</span>
+                                <span class={`${meta.icon} text-4xl`} />
+                                <Badge variant={meta.badgeVariant} size="sm">
+                                  {meta.label}
+                                </Badge>
                               </div>
                             }
                           >
@@ -233,10 +390,18 @@ export function Assets(): import("solid-js").JSX.Element {
 
                         {/* Card Info */}
                         <div class="p-3.5 flex flex-col gap-2 flex-1 justify-between">
-                          <div class="flex flex-col gap-0.5">
-                            <span class="font-medium text-xs text-[var(--text)] truncate font-mono" title={asset.path}>
-                              {asset.path}
-                            </span>
+                          <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-1.5">
+                              <Badge variant={meta.badgeVariant} size="sm">
+                                {meta.label}
+                              </Badge>
+                              <span
+                                class="font-medium text-xs text-[var(--text)] truncate font-mono flex-1"
+                                title={asset.path}
+                              >
+                                {asset.path}
+                              </span>
+                            </div>
                             <span class="text-[10px] text-[var(--muted)]">
                               更新于 {asset.updatedAt.slice(0, 10)}
                             </span>
@@ -248,9 +413,9 @@ export function Assets(): import("solid-js").JSX.Element {
                               size="xs"
                               class="flex-1"
                               icon="i-ri-code-s-slash-line"
-                              onClick={() => void copyMarkdown(asset.path)}
+                              onClick={() => void copyTag(asset)}
                             >
-                              复制 MD
+                              {cat === "image" ? "复制 MD" : "复制标签"}
                             </Button>
                             <Button
                               variant="outline"
@@ -268,65 +433,97 @@ export function Assets(): import("solid-js").JSX.Element {
               </div>
             </Show>
 
-            {/* View Mode: Table */}
-            <Show when={viewMode() === "table"}>
+            {/* View Mode: Table (所有非图片分类强制此模式，图片也支持切换此模式) */}
+            <Show when={effectiveViewMode() === "table"}>
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow hoverable={false}>
                       <TableHeader class="w-[35%]">资产路径</TableHeader>
-                      <TableHeader class="w-[15%]">类型</TableHeader>
+                      <TableHeader class="w-[12%]">分类</TableHeader>
+                      <TableHeader class="w-[12%]">格式/类型</TableHeader>
                       <TableHeader class="w-[12%]">大小</TableHeader>
-                      <TableHeader class="w-[18%]">R2 Key</TableHeader>
+                      <TableHeader class="w-[15%]">R2 Key</TableHeader>
                       <TableHeader class="w-[10%]">更新日期</TableHeader>
-                      <TableHeader class="w-[10%] text-right">操作</TableHeader>
+                      <TableHeader class="w-[14%] text-right">操作</TableHeader>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     <For each={list()}>
-                      {(asset) => (
-                        <TableRow>
-                          <TableCell>
-                            <div class="flex items-center gap-2">
-                              <span class="i-ri-image-line text-[var(--muted)] text-base" />
-                              <span class="font-mono text-xs font-medium text-[var(--text)]">{asset.path}</span>
-                            </div>
-                          </TableCell>
+                      {(asset) => {
+                        const cat = resolveAssetCategory(asset);
+                        const meta = CATEGORY_CONFIG[cat];
 
-                          <TableCell>
-                            <span class="text-xs text-[var(--muted)]">
-                              {asset.assetType}/{asset.fileType}
-                            </span>
-                          </TableCell>
+                        return (
+                          <TableRow>
+                            <TableCell>
+                              <div class="flex items-center gap-2">
+                                <span class={`${meta.icon} text-[var(--muted)] text-base`} />
+                                <span
+                                  class="font-mono text-xs font-medium text-[var(--text)] truncate max-w-xs"
+                                  title={asset.path}
+                                >
+                                  {asset.path}
+                                </span>
+                              </div>
+                            </TableCell>
 
-                          <TableCell>
-                            <span class="text-xs font-mono text-[var(--text)]">
-                              {formatBytes(asset.size)}
-                            </span>
-                          </TableCell>
+                            <TableCell>
+                              <Badge variant={meta.badgeVariant} size="sm">
+                                {meta.label}
+                              </Badge>
+                            </TableCell>
 
-                          <TableCell>
-                            <span class="font-mono text-xs text-[var(--muted)] truncate max-w-36 block">
-                              {asset.r2Key ?? "—"}
-                            </span>
-                          </TableCell>
+                            <TableCell>
+                              <span class="text-xs font-mono text-[var(--muted)]">
+                                {asset.fileType}
+                              </span>
+                            </TableCell>
 
-                          <TableCell>
-                            <span class="text-xs text-[var(--muted)]">{asset.updatedAt.slice(0, 10)}</span>
-                          </TableCell>
+                            <TableCell>
+                              <span class="text-xs font-mono text-[var(--text)]">
+                                {formatBytes(asset.size)}
+                              </span>
+                            </TableCell>
 
-                          <TableCell class="text-right">
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              icon="i-ri-code-s-slash-line"
-                              onClick={() => void copyMarkdown(asset.path)}
-                            >
-                              复制 MD
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )}
+                            <TableCell>
+                              <span
+                                class="font-mono text-xs text-[var(--muted)] truncate max-w-36 block"
+                                title={asset.r2Key ?? ""}
+                              >
+                                {asset.r2Key ?? "—"}
+                              </span>
+                            </TableCell>
+
+                            <TableCell>
+                              <span class="text-xs text-[var(--muted)]">
+                                {asset.updatedAt.slice(0, 10)}
+                              </span>
+                            </TableCell>
+
+                            <TableCell class="text-right">
+                              <div class="flex items-center justify-end gap-1.5">
+                                <Button
+                                  variant="secondary"
+                                  size="xs"
+                                  icon="i-ri-code-s-slash-line"
+                                  onClick={() => void copyTag(asset)}
+                                  title={cat === "image" ? "复制 Markdown 图片标签" : "复制引用标签"}
+                                >
+                                  {cat === "image" ? "复制 MD" : "复制标签"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="xs"
+                                  icon="i-ri-file-copy-line"
+                                  onClick={() => void copyPath(asset.path)}
+                                  title="复制路径"
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }}
                     </For>
                   </TableBody>
                 </Table>
