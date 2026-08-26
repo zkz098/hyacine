@@ -1,71 +1,209 @@
-# hyacine
+# Hyacine
 
-astro-blog-shokax 配套平台：一张 D1/KV/R2 之上的无状态工具链。
+<div align="center">
 
-> 部署指南见 [DEPLOY.md](./DEPLOY.md)（Cloudflare Worker + CLI + 桌面端完整流程）。
+**A cloud-native headless platform & AI toolchain for modern Astro blogs, powered by Cloudflare Workers, D1, KV, and R2.**
 
-## 组件
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522.12.0-brightgreen.svg)](https://nodejs.org/)
+[![pnpm](https://img.shields.io/badge/pnpm-%E2%89%A511.0.0-orange.svg)](https://pnpm.io/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg)](https://www.typescriptlang.org/)
+[![Astro](https://img.shields.io/badge/Astro-5%2B%20%7C%207%2B-orange.svg)](https://astro.build/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%7C%20D1%20%7C%20R2-F38020.svg)](https://workers.cloudflare.com/)
 
-| 包                  | 说明                                                           | 运行时                              |
-| ------------------- | -------------------------------------------------------------- | ----------------------------------- |
-| `packages/contract` | zod schemas + 推导类型 + typed client（三端唯一真相）          | 纯 TS，零依赖（仅 zod）             |
-| `packages/api`      | Cloudflare Worker (Hono)：认证、索引 sync、AI 端点、R2 presign | workerd (@cloudflare/workers-types) |
-| `packages/cli`      | hyc 续作：本地模式（纯 fs，无状态）+ 远程模式（经 API）        | Node ≥ 22                           |
+[Overview](#overview) •
+[Features](#features) •
+[Monorepo Packages](#monorepo-packages) •
+[Architecture](#architecture--design-principles) •
+[Quickstart](#quickstart) •
+[SDK Documentation](#sdk-documentation) •
+[Deployment](#deployment) •
+[Contributing](#contributing)
 
-## 架构决策（/grilling 2026-08-24 定稿）
+</div>
 
-- **文件/git 为真相，D1 是派生索引**。构建永远离线：AI 产物物化回 frontmatter 后再 commit。
-- **严格切割双状态**：未配置 api.url+token = 本地模式（fs+git+build+备份+主题配置）；配置后 = 远程模式（+AI/统计/sync）。无降级近似，`--local` 可强制。
-- **单租户自托管**：无 tenants 表；BYOK（AI key 部署级配置，密钥不出 worker）。
-- **认证**：setup code（worker secret）交换长期 Bearer，scopes: `posts.r` `posts.w` `ai` `admin`。
-- **AI**：摘要走 BYOK OpenAI 兼容端点；嵌入走 Workers AI text-embeddings，向量存 D1 blob 全表 cosine（>5k 篇再升 Vectorize）。
-- **资产管线**：R2 presigned 直传，图片处理在本地 sharp，Workers 只签名不碰字节。
-- **部署**：git push 触发 CI；桌面/管理台与博客同城无关。
+---
 
-## 里程碑
+## Overview
 
-- [x] M0 设计定型（/grilling）
-- [x] M2 云端闭环：contract + api + cli（本地/远程/物化）
-- [x] M3 管理台 SPA（apps/console：统计/文章+AI 状态/sync/资产/令牌/设置）
-- [x] M4 Tauri 桌面壳（apps/desktop：本地工作台/Milkdown 编辑器/frontmatter 表单/Git 面板/AI 物化，Windows MSVC 构建）
+**Hyacine** is the companion platform and content engine for [astro-blog-shokax](https://github.com/zkz098/astro-blog-shokax) and modern Astro-based blogs. It bridges edge databases (Cloudflare D1), object storage (R2), and Workers AI directly into **100% pure Static Site Generation (SSG)** workflows via Astro Content Layer Live Collections.
 
-## 桌面（M4）验证
+By designating Cloudflare D1 as the single source of truth, Hyacine eliminates the friction of managing Markdown/MDX files across Git branches while preserving zero runtime compute cost, instant global CDN delivery, and AI-powered recommendations.
 
-```bash
-# MSVC 链：VS 2026 Community（18/Community）+ WinSDK 10.0.28000
-# cargo 必须经 build.bat（Git Bash 的 link.exe 会遮蔽 MSVC linker）
-cmd /c "scripts\build.bat build --manifest-path apps\desktop\src-tauri\Cargo.toml -p hyacine-desktop"
-# 产物：apps/desktop/src-tauri/target/debug/hyacine-desktop.exe
-# 开发调试：pnpm --filter @hyacine/desktop dev（console dev 端口 5199）
+---
+
+## Features
+
+- 🚀 **SSG Live Collections (`@hyacine/sdk/astro`)**: Fetch content directly from D1 into Astro during `astro build`. Zero Git merge conflicts, zero SSR cold starts.
+- 🧠 **Pre-baked AI Similarity Graph**: Automatically computes in-memory cosine similarity matrices across vector embeddings during static build, baking Top-K related articles into static HTML.
+- 📝 **Intelligent Card Excerpt & Summaries**: Multi-tier fallback extraction (Frontmatter Description > AI Summary > Markdown-stripped body) fully compatible with theme card options.
+- 🔒 **Privacy-First Guard**: Automatically identifies encrypted articles (`encrypted: true` / `password`), strictly blocking sensitive content from external AI endpoints.
+- 🖥️ **Multi-Surface Editing**:
+  - **Tauri Desktop Workbench (`apps/desktop`)**: Local-first Milkdown WYSIWYG editor with offline Git operations and cloud sync.
+  - **Web Management Console (`apps/console`)**: Solid.js SPA for dashboard analytics, token management, asset uploads, and AI status.
+  - **CLI (`packages/cli`)**: Unified `hyc` command-line companion for local and remote operations.
+- ⚡ **R2 S3-Compatible Asset Pipeline**: Direct client-to-R2 uploads via SigV4 presigned URLs; workers sign without touching file bytes.
+- 🔑 **Bring Your Own Key (BYOK)**: User-provided OpenAI-compatible endpoints or Cloudflare Workers AI with secrets held at worker deployment level.
+
+---
+
+## Monorepo Packages
+
+| Package / App                              | Description                                                                            | Runtime / Tech                        |
+| :----------------------------------------- | :------------------------------------------------------------------------------------- | :------------------------------------ |
+| [`packages/sdk`](./packages/sdk)           | TypeScript SDK for Astro Live Collections, similarity graph pre-baking, and AI helpers | Universal TS (Node / Browser / Astro) |
+| [`packages/contract`](./packages/contract) | Zod schemas, inferred types, and typed API client (single contract truth)              | Pure TS (Zero dependency)             |
+| [`packages/api`](./packages/api)           | Cloudflare Worker (Hono): Auth, D1 CRUD, Workers AI embeddings, R2 presign             | Cloudflare `workerd`                  |
+| [`packages/cli`](./packages/cli)           | `hyc` command-line interface: local/remote mode, D1 sync, and project bootstrap        | Node.js ≥ 22                          |
+| [`apps/console`](./apps/console)           | Web management dashboard SPA (posts, assets, tokens, AI queue, settings)               | Solid.js + UnoCSS + Vite              |
+| [`apps/desktop`](./apps/desktop)           | Desktop workbench (Milkdown editor, local git, dual-mode workspace)                    | Tauri v2 + Solid.js (MSVC on Windows) |
+
+---
+
+## Architecture & Design Principles
+
+```
+                       ┌───────────────────────────────┐
+                       │   Hyacine Desktop / Console   │
+                       └───────────────┬───────────────┘
+                                       │ Edit & Save
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │    Cloudflare Worker (API)    │
+                       ├───────────────────────────────┤
+                       │  • D1 (Posts & AI Results)    │
+                       │  • Workers AI / BYOK Summary  │
+                       │  • R2 (Presigned Assets)      │
+                       └───────────────┬───────────────┘
+                                       │ Deploy Webhook
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │  Astro SSG Build Pipeline     │
+                       ├───────────────────────────────┤
+                       │  hyacineLoader (@hyacine/sdk) │
+                       │   ├── Batch Pull from D1      │
+                       │   ├── Pre-bake Similar Graph  │
+                       │   └── Astro DataStore Digest  │
+                       └───────────────┬───────────────┘
+                                       ▼
+                       ┌───────────────────────────────┐
+                       │  100% Pure Static Output      │
+                       │  (Cloudflare Pages / GitHub)  │
+                       └───────────────────────────────┘
 ```
 
-**桌面离线模式**：工作台/编辑器/Git 属文件平面——无需 API 登录即可用（严格切割）：
-选博客目录 → 编辑/新建文章 → git commit。云平面（仪表盘/文章索引/同步/令牌/AI 摘要）
-才需要登录；登录页可「跳过登录，进入本地模式」。
+1. **D1 as the Persistent Source of Truth**: Content and metadata reside in Cloudflare D1. Astro pulls snapshots during SSG build, guaranteeing build determinism without requiring Git commits for every typo fix.
+2. **Offline-Friendly Fallback**: The CLI and Desktop shell provide a strict dual-mode boundary: unauthenticated local mode for pure file/git editing, and remote mode for cloud sync and AI capabilities.
+3. **Stateless Edge Execution**: The API Worker maintains no state in memory, offloading data to D1, cache to KV, and binary blobs to R2.
 
-## 本机验证（M2 验收路径）
+---
 
-```bash
-# API（本地 miniflare，无需 CF 账号）
-cd packages/api
-cp .dev.vars.example .dev.vars   # 填 SETUP_CODE / AI 端点
-pnpm exec wrangler d1 migrations apply DB --local
-node scripts/smoke.mjs            # health→setup→sync→presign 全链
+## Quickstart
 
-# CLI 端到端（需要另一个终端跑 wrangler dev --local）
-cd packages/cli && pnpm run build
-cd <博客项目>
-hyc list                                 # 本地模式：纯文件
-hyc login --url http://127.0.0.1:8787 --code <SETUP_CODE>
-hyc sync && hyc ai:summary --all          # 索引上行 + 摘录物化回 frontmatter
-```
+### 1. Prerequisites
 
-> 本地 miniflare 的 Workers AI binding（embed）不可用，ai:embed / ai:similar 需远程环境；
-> BYOK 摘要（OpenAI 兼容端点）本地可跑通（把 AI_SUMMARY_ENDPOINT 指向自建 stub）。
+- [Node.js](https://nodejs.org/) $\ge$ 22.12.0
+- [pnpm](https://pnpm.io/) $\ge$ 11.0.0
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (for Cloudflare Workers deployment)
 
-## 开发
+### 2. Monorepo Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/zkz098/hyacine.git
+cd hyacine
+
+# Install dependencies
 pnpm install
-pnpm run check   # lint:ci + format:ci + typecheck + test
+
+# Run comprehensive workspace check (lint, format, typecheck, test)
+pnpm run check
 ```
+
+### 3. Using `@hyacine/sdk` in an Astro Project
+
+Install the SDK in your Astro site:
+
+```bash
+pnpm add @hyacine/sdk
+```
+
+Configure `src/content.config.ts`:
+
+```ts
+import { defineCollection, z } from "astro:content";
+import { hyacineLoader } from "@hyacine/sdk/astro";
+
+export const collections = {
+  posts: defineCollection({
+    loader: hyacineLoader({
+      apiUrl: import.meta.env.HYACINE_API_URL,
+      token: import.meta.env.HYACINE_READ_TOKEN,
+      prefix: "src/posts",
+      withAiMetadata: true,
+      calculateSimilarGraph: true,
+    }),
+    schema: ({ image }) =>
+      z.object({
+        title: z.string(),
+        date: z.coerce.date(),
+        tags: z.array(z.string()).optional(),
+        categories: z.array(z.string()).optional(),
+        cover: z.union([image(), z.string()]).optional(),
+        ai: z
+          .object({
+            summary: z.object({ summary: z.string().nullable() }).optional(),
+          })
+          .optional(),
+        similarPosts: z.array(z.any()).optional(),
+      }),
+  }),
+};
+```
+
+Run standard Astro static build:
+
+```bash
+pnpm run build
+```
+
+---
+
+## SDK Documentation
+
+Detailed documentation for `@hyacine/sdk` is available under [`packages/sdk/docs/`](./packages/sdk/docs/):
+
+- 📘 [SDK Overview & Architecture](./packages/sdk/docs/README.md)
+- 🚀 [Quickstart Guide](./packages/sdk/docs/quickstart.md)
+- 🧩 [Astro Live Collections Guide](./packages/sdk/docs/astro-live-collections.md)
+- 🤖 [AI Services & Similarity Graph Guide](./packages/sdk/docs/ai-services.md)
+- 📖 [Complete API Reference](./packages/sdk/docs/api-reference.md)
+
+---
+
+## Deployment
+
+Refer to [`DEPLOY.md`](./DEPLOY.md) for step-by-step instructions on:
+
+- Setting up Cloudflare D1 database migrations
+- Configuring Workers AI and BYOK OpenAI-compatible secrets
+- Deploying the API Worker to Cloudflare
+- Setting up CI/CD workflows for automatic Astro static deployments
+
+---
+
+## Scripts & Development
+
+```bash
+pnpm run typecheck     # Run TypeScript typecheck across all packages
+pnpm run test          # Run Vitest unit test suite (240+ tests)
+pnpm run lint          # Run Oxlint checks
+pnpm run format        # Run Oxfmt code formatting
+pnpm run check         # Run lint, format, typecheck, and test in sequence
+```
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
