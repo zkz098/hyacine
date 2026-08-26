@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-article-age-warning",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hyacine 官方插件：文章发布较早/内容过时提示（SSR 零客户端 JS）",
   "homepage": "https://github.com/zkz098/hyacine#readme",
   "repository": {
