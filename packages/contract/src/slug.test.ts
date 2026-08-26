@@ -12,6 +12,12 @@ describe("slug 策略", () => {
     expect(autoSlug("  你好 世界 ")).toBe("ni-hao-shi-jie");
   });
 
+  it("autoSlug: 中英文混排时保持英文单词完整性", () => {
+    expect(autoSlug("自定义 Markdown 语法演示")).toBe("zi-ding-yi-markdown-yu-fa-yan-shi");
+    expect(autoSlug("ShokaX 主题 2.0 发布")).toBe("shokax-zhu-ti-2-0-fa-bu");
+    expect(autoSlug("Vue3 与 TypeScript 实战")).toBe("vue3-yu-typescript-shi-zhan");
+  });
+
   it("autoSlug: ASCII 标题原样", () => {
     expect(autoSlug("Hello World!")).toBe("hello-world");
   });

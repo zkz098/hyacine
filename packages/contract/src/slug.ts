@@ -42,7 +42,7 @@ export function sanitizeExplicitSlug(raw: string): string {
 export function autoSlug(title: string): string {
   let base = title.trim();
   if (containsCjk(base)) {
-    base = pinyin(base, { toneType: "none", type: "array" }).join("-");
+    base = pinyin(base, { toneType: "none", type: "array", nonZh: "consecutive" }).join("-");
   }
   const slug = base
     .toLowerCase()
