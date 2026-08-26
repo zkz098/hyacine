@@ -1,10 +1,12 @@
 import { Hono } from "hono";
 import { loadEffectiveConfig } from "../utils/config";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 export function healthRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   app.get("/api/health", async (c) => {
-    const cfg = await loadEffectiveConfig(c.env);
+    const db = getDb(c);
+    const cfg = await loadEffectiveConfig(c.env, db);
     const needsSetup = (c.env.SETUP_CODE ?? "").length === 0;
     const hasSummary =
       cfg.aiSummary.provider === "workers-ai"

@@ -4,6 +4,7 @@ import { SetupRequestSchema, TokenCreateRequestSchema } from "@hyacine/contract"
 import { generateToken, sha256Hex, timingSafeEqual } from "../utils/crypto";
 import { errorBody, flattenZodError } from "../utils/errors";
 import { defer } from "../utils/defer";
+import { getDb } from "../utils/db";
 import { authMiddleware } from "../middleware/auth";
 import type { Env, Variables } from "../types";
 
@@ -73,9 +74,11 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     const label = parsed.data.label ?? "admin";
     const scopes = JSON.stringify(["posts.r", "posts.w", "ai", "admin"]);
 
-    await c.env.DB.prepare(
-      "INSERT INTO api_tokens (token_hash, label, scopes, expires_at, last_used_at, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)",
-    )
+    const db = getDb(c);
+    await db
+      .prepare(
+        "INSERT INTO api_tokens (token_hash, label, scopes, expires_at, last_used_at, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)",
+      )
       .bind(tokenHash, label, scopes, null, null, now)
       .run();
 
@@ -106,9 +109,11 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
     const scopes = JSON.stringify(parsed.data.scopes);
 
-    await c.env.DB.prepare(
-      "INSERT INTO api_tokens (token_hash, label, scopes, expires_at, last_used_at, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)",
-    )
+    const db = getDb(c);
+    await db
+      .prepare(
+        "INSERT INTO api_tokens (token_hash, label, scopes, expires_at, last_used_at, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, 0)",
+      )
       .bind(tokenHash, parsed.data.label, scopes, expiresAt, null, now)
       .run();
 
@@ -122,17 +127,20 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
   });
 
   app.get("/api/auth/tokens", authMiddleware(["admin"]), async (c) => {
-    const result = await c.env.DB.prepare(
-      "SELECT token_hash, label, scopes, expires_at, last_used_at, created_at, revoked FROM api_tokens ORDER BY created_at DESC",
-    ).all<{
-      token_hash: string;
-      label: string;
-      scopes: string;
-      expires_at: string | null;
-      last_used_at: string | null;
-      created_at: string;
-      revoked: number;
-    }>();
+    const db = getDb(c);
+    const result = await db
+      .prepare(
+        "SELECT token_hash, label, scopes, expires_at, last_used_at, created_at, revoked FROM api_tokens ORDER BY created_at DESC",
+      )
+      .all<{
+        token_hash: string;
+        label: string;
+        scopes: string;
+        expires_at: string | null;
+        last_used_at: string | null;
+        created_at: string;
+        revoked: number;
+      }>();
 
     const tokens = (result.results ?? []).map((row) => {
       let scopes: string[];
@@ -160,17 +168,18 @@ export function authRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     if (id.length === 0) {
       return c.json(errorBody("validation_error", "缺少 id"), 400);
     }
+    const db = getDb(c);
     // token_hash 是 PRIMARY KEY：用前缀范围查询（走索引），避免全表扫描 + JS 过滤
-    const rows = await c.env.DB.prepare(
-      "SELECT token_hash FROM api_tokens WHERE token_hash >= ? AND token_hash < ?",
-    )
+    const rows = await db
+      .prepare("SELECT token_hash FROM api_tokens WHERE token_hash >= ? AND token_hash < ?")
       .bind(id, `${id}\uffff`)
       .all<{ token_hash: string }>();
     const matched = (rows.results ?? [])[0];
     if (matched === undefined) {
       return c.json(errorBody("not_found", "token 不存在"), 404);
     }
-    await c.env.DB.prepare("UPDATE api_tokens SET revoked = 1 WHERE token_hash = ?")
+    await db
+      .prepare("UPDATE api_tokens SET revoked = 1 WHERE token_hash = ?")
       .bind(matched.token_hash)
       .run();
     return c.json({ id, revoked: true });

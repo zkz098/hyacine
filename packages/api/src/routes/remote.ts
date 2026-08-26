@@ -9,6 +9,7 @@ import { postBodyHash } from "../utils/hash";
 import { parseFrontmatterMeta } from "../utils/frontmatter";
 import { triggerExportDispatch } from "../utils/github";
 import { enqueueAiNeeds, processAiQueue } from "../utils/aiQueue";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 function cleanSlugText(raw: string): string {
@@ -67,16 +68,19 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     // 本地轻量 slug（Worker 侧无拼音依赖，见文件头部注释）
     const slug = resolveSlug(meta.slug, title);
 
-    const existing = await c.env.DB.prepare("SELECT hash, created_at FROM posts WHERE path = ?")
+    const db = getDb(c);
+    const existing = await db
+      .prepare("SELECT hash, created_at FROM posts WHERE path = ?")
       .bind(path)
       .first<{ hash: string; created_at: string }>();
     const oldHash = existing?.hash ?? null;
     const changed = oldHash === null || oldHash !== hash;
     const now = new Date().toISOString();
 
-    await c.env.DB.prepare(
-      "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content, deleted_at=NULL",
-    )
+    await db
+      .prepare(
+        "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=excluded.content, deleted_at=NULL",
+      )
       .bind(
         path,
         slug,
@@ -93,20 +97,23 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
 
     // 正文变更 → 旧 AI 产物失效
     if (changed && oldHash !== null && oldHash !== hash) {
-      await c.env.DB.prepare("DELETE FROM ai_results WHERE hash = ?").bind(oldHash).run();
+      await db.prepare("DELETE FROM ai_results WHERE hash = ?").bind(oldHash).run();
     }
 
     // autogen 联动：正文变更且配置开启 → 入队 + 内联消费
     if (changed) {
-      const cfg = await loadEffectiveConfig(c.env);
+      const cfg = await loadEffectiveConfig(c.env, db);
       const kinds: ("summary" | "embed" | "both")[] = [];
       if (cfg.aiSummary.autogen) kinds.push("summary");
       if (cfg.embedAutogen) kinds.push("embed");
       if (kinds.length > 0) {
-        await enqueueAiNeeds(c.env, [
-          { hash, path, reason: kinds.length === 2 ? "both" : (kinds[0] ?? "summary") },
-        ]);
-        defer(c, processAiQueue(c.env, 3));
+        await enqueueAiNeeds(
+          c.env,
+          [{ hash, path, reason: kinds.length === 2 ? "both" : (kinds[0] ?? "summary") }],
+          undefined,
+          db,
+        );
+        defer(c, processAiQueue(c.env, 3, undefined, db));
       }
     }
 
@@ -136,9 +143,9 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
     if (path.length === 0) {
       return c.json(errorBody("validation_error", "缺少 path 参数"), 400);
     }
-    const row = await c.env.DB.prepare(
-      "SELECT content FROM posts WHERE path = ? AND deleted_at IS NULL",
-    )
+    const db = getDb(c);
+    const row = await db
+      .prepare("SELECT content FROM posts WHERE path = ? AND deleted_at IS NULL")
       .bind(path)
       .first<{ content: string | null }>();
     if (row === null || row === undefined || row.content === null) {
@@ -148,9 +155,12 @@ export function remoteRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
   });
 
   app.get("/api/export", authMiddleware(["posts.r"]), async (c) => {
-    const result = await c.env.DB.prepare(
-      "SELECT path, content FROM posts WHERE deleted_at IS NULL AND content IS NOT NULL AND content != '' ORDER BY path",
-    ).all<{ path: string; content: string | null }>();
+    const db = getDb(c);
+    const result = await db
+      .prepare(
+        "SELECT path, content FROM posts WHERE deleted_at IS NULL AND content IS NOT NULL AND content != '' ORDER BY path",
+      )
+      .all<{ path: string; content: string | null }>();
     const posts = (result.results ?? [])
       .filter((row) => row.content !== null)
       .map((row) => ({ path: row.path, content: row.content as string }));

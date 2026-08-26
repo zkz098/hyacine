@@ -1,13 +1,13 @@
 // oxlint-disable typescript/no-unsafe-type-assertion, unicorn/no-array-sort
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/auth";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 export function statsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   app.get("/api/stats", authMiddleware(["posts.r"]), async (c) => {
-    const postsResult = await c.env.DB.prepare(
-      "SELECT draft, categories, created_at FROM posts",
-    ).all<{
+    const db = getDb(c);
+    const postsResult = await db.prepare("SELECT draft, categories, created_at FROM posts").all<{
       draft: number;
       categories: string;
       created_at: string;
@@ -41,7 +41,7 @@ export function statsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, count }));
 
-    const assetsResult = await c.env.DB.prepare("SELECT is_remote FROM assets").all<{
+    const assetsResult = await db.prepare("SELECT is_remote FROM assets").all<{
       is_remote: number;
     }>();
     const assetsRows = assetsResult.results ?? [];

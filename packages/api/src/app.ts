@@ -19,10 +19,36 @@ export function createApp(): Hono<{ Bindings: Env; Variables: Variables }> {
     "*",
     cors({
       origin: "*",
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", "x-d1-bookmark", "X-D1-Bookmark"],
+      exposeHeaders: ["x-d1-bookmark", "X-D1-Bookmark"],
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
   );
+
+  app.use("*", async (c, next) => {
+    const rawBookmark = c.req.header("x-d1-bookmark") ?? c.req.header("X-D1-Bookmark");
+    const bookmark =
+      rawBookmark !== undefined && rawBookmark.trim().length > 0
+        ? rawBookmark.trim()
+        : "first-unconstrained";
+
+    if (c.env?.DB && typeof c.env.DB.withSession === "function") {
+      const session = c.env.DB.withSession(bookmark);
+      c.set("db", session);
+    } else if (c.env?.DB) {
+      c.set("db", c.env.DB);
+    }
+
+    await next();
+
+    const session = c.get("db") as D1DatabaseSession | undefined;
+    if (session && typeof session.getBookmark === "function") {
+      const nextBookmark = session.getBookmark();
+      if (nextBookmark !== null && nextBookmark !== undefined && nextBookmark.length > 0) {
+        c.res.headers.set("x-d1-bookmark", nextBookmark);
+      }
+    }
+  });
 
   app.onError((error, c) => {
     // zod validation etc should be handled per-route, here catch unexpected

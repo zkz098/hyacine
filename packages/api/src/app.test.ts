@@ -11,9 +11,10 @@ async function request(
   path: string,
   body?: unknown,
   token?: string,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   const app = createApp();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extraHeaders };
   if (body !== undefined) headers["content-type"] = "application/json";
   if (token !== undefined) headers.authorization = `Bearer ${token}`;
   const requestInit: RequestInit = { method, headers };
@@ -1714,5 +1715,44 @@ describe("manual ai generate", () => {
     const json = (await res.json()) as { errors: string[]; summary: { present: boolean } };
     expect(json.errors.length).toBeGreaterThan(0);
     expect(json.summary.present).toBe(false);
+  });
+});
+
+describe("D1 Sessions API (withSession & x-d1-bookmark)", () => {
+  it("returns x-d1-bookmark header on successful requests", async () => {
+    const env = createTestEnv();
+    const response = await request(env, "GET", "/api/health");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-d1-bookmark")).toBe("bm-after-first-unconstrained");
+  });
+
+  it("propagates and updates bookmark when request provides x-d1-bookmark header", async () => {
+    const env = createTestEnv();
+    const response = await request(env, "GET", "/api/health", undefined, undefined, {
+      "x-d1-bookmark": "client-bm-42",
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-d1-bookmark")).toBe("bm-after-client-bm-42");
+  });
+
+  it("handles CORS preflight and exposes x-d1-bookmark header", async () => {
+    const env = createTestEnv();
+    const app = createApp();
+    const response = await app.fetch(
+      new Request("http://test/api/posts", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://example.com",
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "authorization, x-d1-bookmark",
+        },
+      }),
+      env,
+    );
+    expect(response.status).toBe(204);
+    const allowHeaders = response.headers.get("access-control-allow-headers") ?? "";
+    const exposeHeaders = response.headers.get("access-control-expose-headers") ?? "";
+    expect(allowHeaders.toLowerCase()).toContain("x-d1-bookmark");
+    expect(exposeHeaders.toLowerCase()).toContain("x-d1-bookmark");
   });
 });

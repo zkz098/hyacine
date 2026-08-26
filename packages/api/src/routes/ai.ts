@@ -21,6 +21,7 @@ import {
   storeSummaryResult,
 } from "../utils/aiQueue";
 import { authMiddleware } from "../middleware/auth";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
@@ -32,14 +33,16 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
     const { path, kinds } = parsed.data;
-    const row = await c.env.DB.prepare("SELECT hash, content FROM posts WHERE path = ?")
+    const db = getDb(c);
+    const row = await db
+      .prepare("SELECT hash, content FROM posts WHERE path = ?")
       .bind(path)
       .first<{ hash: string; content: string | null }>();
     if (row === null || row === undefined || row.content === null) {
       return c.json(errorBody("not_found", "文章无正文（请先同步/上传正文到 D1）"), 404);
     }
 
-    const cfg = await loadEffectiveConfig(c.env);
+    const cfg = await loadEffectiveConfig(c.env, db);
     const summaryModel = cfg.aiSummary.model.length > 0 ? cfg.aiSummary.model : "";
     const embedModel = cfg.embedModel.length > 0 ? cfg.embedModel : EMBED_DEFAULT_MODEL;
     const errors: string[] = [];
@@ -60,6 +63,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
             summary,
             summaryModel || "@cf/meta/llama-3.2-3b-instruct",
             now,
+            db,
           );
         } else {
           if (cfg.aiSummary.endpoint.length === 0 || cfg.aiSummary.key.length === 0) {
@@ -71,7 +75,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
               summaryModel,
               stripped,
             );
-            await storeSummaryResult(c.env, row.hash, summary, summaryModel, now);
+            await storeSummaryResult(c.env, row.hash, summary, summaryModel, now, db);
           }
         }
       } catch (error) {
@@ -89,15 +93,17 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
           now,
           vector,
           chunkText(stripped).length,
+          db,
         );
       } catch (error) {
         errors.push(`嵌入: ${String(error)}`);
       }
     }
 
-    const result = await c.env.DB.prepare(
-      "SELECT summary, summary_model, summary_at, embed_model, embed_at, embed_vec FROM ai_results WHERE hash = ?",
-    )
+    const result = await db
+      .prepare(
+        "SELECT summary, summary_model, summary_at, embed_model, embed_at, embed_vec FROM ai_results WHERE hash = ?",
+      )
       .bind(row.hash)
       .first<{
         summary: string | null;
@@ -132,16 +138,16 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
 
     const { hash, content, model } = parsed.data;
 
-    const cfg = await loadEffectiveConfig(c.env);
+    const db = getDb(c);
+    const cfg = await loadEffectiveConfig(c.env, db);
     const endpoint = cfg.aiSummary.endpoint;
     const key = cfg.aiSummary.key;
     const configuredModel = cfg.aiSummary.model;
     const usedModel = model ?? configuredModel ?? "unknown";
 
     // KV cache check: try D1 first
-    const existing = await c.env.DB.prepare(
-      "SELECT summary, summary_model, summary_at FROM ai_results WHERE hash = ?",
-    )
+    const existing = await db
+      .prepare("SELECT summary, summary_model, summary_at FROM ai_results WHERE hash = ?")
       .bind(hash)
       .first<{ summary: string | null; summary_model: string | null; summary_at: string | null }>();
     if (existing !== null && existing !== undefined && existing.summary !== null) {
@@ -183,7 +189,7 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     }
 
     const now = new Date().toISOString();
-    await storeSummaryResult(c.env, hash, summaryText, usedModel, new Date(now));
+    await storeSummaryResult(c.env, hash, summaryText, usedModel, new Date(now), db);
 
     // KV 缓存写入：defer（线上 waitUntil）保证落盘，floating promise 会被丢弃
     if (c.env.CACHE !== undefined) {
@@ -208,7 +214,8 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     }
 
     const { hash, chunks } = parsed.data;
-    const cfg = await loadEffectiveConfig(c.env);
+    const db = getDb(c);
+    const cfg = await loadEffectiveConfig(c.env, db);
     const model = parsed.data.model ?? (cfg.embedModel || "@cf/baai/bge-m3");
 
     // Check if AI binding exists
@@ -255,9 +262,10 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
     const dim = docVector.length;
     const now = new Date().toISOString();
 
-    await c.env.DB.prepare(
-      "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
-    )
+    await db
+      .prepare(
+        "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
+      )
       .bind(hash, model, dim, now, JSON.stringify(docVector), chunks.length)
       .run();
 
@@ -273,7 +281,9 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
 
     const { hash, limit } = parsed.data;
 
-    const queryRow = await c.env.DB.prepare("SELECT embed_vec FROM ai_results WHERE hash = ?")
+    const db = getDb(c);
+    const queryRow = await db
+      .prepare("SELECT embed_vec FROM ai_results WHERE hash = ?")
       .bind(hash)
       .first<{ embed_vec: string | null }>();
     if (queryRow === null || queryRow === undefined || queryRow.embed_vec === null) {
@@ -287,18 +297,18 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       return c.json(errorBody("embedding_missing", "查询向量解析失败"), 404);
     }
 
-    const allPosts = await c.env.DB.prepare("SELECT path, slug, title, hash FROM posts").all<{
+    const allPosts = await db.prepare("SELECT path, slug, title, hash FROM posts").all<{
       path: string;
       slug: string;
       title: string;
       hash: string;
     }>();
-    const allVectors = await c.env.DB.prepare(
-      "SELECT hash, embed_vec FROM ai_results WHERE embed_vec IS NOT NULL",
-    ).all<{
-      hash: string;
-      embed_vec: string | null;
-    }>();
+    const allVectors = await db
+      .prepare("SELECT hash, embed_vec FROM ai_results WHERE embed_vec IS NOT NULL")
+      .all<{
+        hash: string;
+        embed_vec: string | null;
+      }>();
 
     const vecMap = new Map<string, number[]>();
     for (const row of allVectors.results ?? []) {
@@ -333,11 +343,13 @@ export function aiRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): vo
       return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
+    const db = getDb(c);
     const entries = [];
     for (const hash of parsed.data.hashes) {
-      const row = await c.env.DB.prepare(
-        "SELECT summary, summary_model, summary_at, embed_model, embed_at, embed_vec FROM ai_results WHERE hash = ?",
-      )
+      const row = await db
+        .prepare(
+          "SELECT summary, summary_model, summary_at, embed_model, embed_at, embed_vec FROM ai_results WHERE hash = ?",
+        )
         .bind(hash)
         .first<{
           summary: string | null;

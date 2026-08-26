@@ -19,4 +19,5 @@ export interface Variables {
   tokenId: string;
   scopes: string[];
   label: string;
+  db?: D1DatabaseSession | D1Database;
 }

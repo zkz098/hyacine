@@ -23,6 +23,8 @@ mode = "smart"
 #   SETUP_CODE / AI_SUMMARY_ENDPOINT / AI_SUMMARY_KEY / AI_SUMMARY_MODEL / EMBED_MODEL
 # 可选 Secrets（资产直传 R2 时才需要）：
 #   R2_S3_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET
+# D1 数据库：代码层已完整接入 D1 Sessions API (withSession + x-d1-bookmark 顺序一致性)
+# 可在 Cloudflare 控制台 (D1 > hyacine > Settings) 开启 "Read Replication" 以启用全球就近只读副本分流
 [[d1_databases]]
 binding = "DB"
 database_name = "hyacine"

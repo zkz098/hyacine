@@ -1,6 +1,8 @@
+// oxlint-disable eslint/no-await-in-loop
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/auth";
 import { errorBody, flattenZodError } from "../utils/errors";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 import { type PostListItem, PostDeleteRequestSchema } from "@hyacine/contract";
 
@@ -70,6 +72,7 @@ function toListItem(row: PostJoinRow): PostListItem {
  */
 export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   app.get("/api/posts", authMiddleware(["posts.r"]), async (c) => {
+    const db = getDb(c);
     const prefix = (c.req.query("prefix") ?? "").trim().replace(/\\/g, "/").replace(/\/+$/, "");
     let sql = `SELECT p.path, p.slug, p.title, p.draft, p.categories, p.hash,
               p.created_at, p.updated_at, p.last_modified,
@@ -84,7 +87,8 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
       params.push(prefix, `${prefix}/%`);
     }
     sql += ` ORDER BY datetime(p.updated_at) DESC`;
-    const result = await c.env.DB.prepare(sql)
+    const result = await db
+      .prepare(sql)
       .bind(...params)
       .all<PostJoinRow>();
 
@@ -98,12 +102,11 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
     if (!parsed.success) {
       return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
+    const db = getDb(c);
     const { paths } = parsed.data;
     const now = new Date().toISOString();
     for (const path of paths) {
-      await c.env.DB.prepare("UPDATE posts SET deleted_at = ? WHERE path = ?")
-        .bind(now, path)
-        .run();
+      await db.prepare("UPDATE posts SET deleted_at = ? WHERE path = ?").bind(now, path).run();
     }
     return c.json({
       deletedCount: paths.length,

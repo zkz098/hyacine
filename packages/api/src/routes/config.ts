@@ -1,9 +1,10 @@
-// oxlint-disable typescript/no-unsafe-type-assertion
+// oxlint-disable typescript/no-unsafe-type-assertion, eslint/no-await-in-loop
 import { Hono } from "hono";
 import { ConfigUpdateRequestSchema, type EffectiveConfig } from "@hyacine/contract";
 import { effectiveConfig, invalidateConfigCache, loadConfigOverrides } from "../utils/config";
 import { errorBody, flattenZodError } from "../utils/errors";
 import { authMiddleware } from "../middleware/auth";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 /** 有效配置 → GET 响应：敏感段只回 set 标志 */
@@ -40,7 +41,8 @@ function toEffective(cfg: ReturnType<typeof effectiveConfig>): EffectiveConfig {
 export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
   // GET：展示当前生效配置（env + D1 合并），敏感值只回 set 标志
   app.get("/api/admin/config", authMiddleware(["admin"]), async (c) => {
-    const overrides = await loadConfigOverrides(c.env);
+    const db = getDb(c);
+    const overrides = await loadConfigOverrides(c.env, db);
     return c.json(toEffective(effectiveConfig(c.env, overrides)));
   });
 
@@ -96,17 +98,19 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       ]);
     }
 
+    const db = getDb(c);
     const changed: { key: string; op: "set" | "clear" }[] = [];
     for (const [key, value] of pairs) {
       if (value === undefined) continue; // 未提供 → 不变
       const normalized = value.trim();
       changed.push({ key, op: normalized.length === 0 ? "clear" : "set" });
       if (normalized.length === 0) {
-        await c.env.DB.prepare("DELETE FROM app_config WHERE key = ?").bind(key).run();
+        await db.prepare("DELETE FROM app_config WHERE key = ?").bind(key).run();
       } else {
-        await c.env.DB.prepare(
-          "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-        )
+        await db
+          .prepare(
+            "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+          )
           .bind(key, normalized, new Date().toISOString())
           .run();
       }
@@ -116,7 +120,7 @@ export function configRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       await invalidateConfigCache(c.env);
     }
 
-    const overrides = await loadConfigOverrides(c.env);
+    const overrides = await loadConfigOverrides(c.env, db);
     return c.json(toEffective(effectiveConfig(c.env, overrides)));
   });
 }

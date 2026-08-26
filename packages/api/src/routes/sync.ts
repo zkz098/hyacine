@@ -1,3 +1,4 @@
+// oxlint-disable eslint/no-await-in-loop
 import { Hono } from "hono";
 import { SyncUploadRequestSchema } from "@hyacine/contract";
 import { errorBody, flattenZodError } from "../utils/errors";
@@ -5,6 +6,7 @@ import { authMiddleware } from "../middleware/auth";
 import { defer } from "../utils/defer";
 import { invalidateConfigCache, loadEffectiveConfig } from "../utils/config";
 import { enqueueAiNeeds, processAiQueue } from "../utils/aiQueue";
+import { getDb } from "../utils/db";
 import type { AiKind } from "../utils/aiQueue";
 import type { Env, Variables } from "../types";
 
@@ -16,8 +18,9 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
     }
 
+    const db = getDb(c);
     const input = parsed.data;
-    const cfg = await loadEffectiveConfig(c.env);
+    const cfg = await loadEffectiveConfig(c.env, db);
 
     // 防线 1：项目身份校验 (Project Handshake)
     const boundProject = cfg.sync.boundProjectId.trim();
@@ -42,17 +45,19 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
           return c.json(errorBody("forbidden", "强制重绑项目身份需要 admin 权限令牌"), 403);
         }
         // 记录新绑定
-        await c.env.DB.prepare(
-          "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-        )
+        await db
+          .prepare(
+            "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+          )
           .bind("sync.boundProjectId", incomingProject, new Date().toISOString())
           .run();
         await invalidateConfigCache(c.env);
       } else if (boundProject.length === 0) {
         // 首次同步自动绑定
-        await c.env.DB.prepare(
-          "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-        )
+        await db
+          .prepare(
+            "INSERT INTO app_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+          )
           .bind("sync.boundProjectId", incomingProject, new Date().toISOString())
           .run();
         await invalidateConfigCache(c.env);
@@ -60,13 +65,13 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
 
     // Load existing active posts (排除已软删除)
-    const existingResult = await c.env.DB.prepare(
-      "SELECT path, hash, content FROM posts WHERE deleted_at IS NULL",
-    ).all<{
-      path: string;
-      hash: string;
-      content: string | null;
-    }>();
+    const existingResult = await db
+      .prepare("SELECT path, hash, content FROM posts WHERE deleted_at IS NULL")
+      .all<{
+        path: string;
+        hash: string;
+        content: string | null;
+      }>();
     const existingMap = new Map<string, { hash: string; content: string | null }>();
     for (const row of existingResult.results ?? []) {
       existingMap.set(row.path, { hash: row.hash, content: row.content });
@@ -119,9 +124,10 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       const isContentChanged = existing === undefined || existing.hash !== post.hash;
       const content = post.content ?? null;
 
-      await c.env.DB.prepare(
-        "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=coalesce(excluded.content, posts.content), deleted_at=NULL",
-      )
+      await db
+        .prepare(
+          "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified, content, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL) ON CONFLICT(path) DO UPDATE SET slug=excluded.slug, title=excluded.title, draft=excluded.draft, categories=excluded.categories, hash=excluded.hash, updated_at=excluded.updated_at, last_modified=excluded.last_modified, content=coalesce(excluded.content, posts.content), deleted_at=NULL",
+        )
         .bind(
           post.path,
           post.slug,
@@ -147,14 +153,16 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     // 防线 3：软删除标记 (保留 30 天回收与 ai_results 保护)
     for (const deleted of candidateDeleted) {
-      await c.env.DB.prepare("UPDATE posts SET deleted_at = ? WHERE path = ?")
+      await db
+        .prepare("UPDATE posts SET deleted_at = ? WHERE path = ?")
         .bind(new Date().toISOString(), deleted)
         .run();
     }
 
     // 自动清理超过 30 天的已软删除老数据
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
-    await c.env.DB.prepare("DELETE FROM posts WHERE deleted_at IS NOT NULL AND deleted_at < ?")
+    await db
+      .prepare("DELETE FROM posts WHERE deleted_at IS NOT NULL AND deleted_at < ?")
       .bind(thirtyDaysAgo)
       .run();
 
@@ -162,9 +170,10 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     // Assets upsert (is_remote=false entries just登记)
     for (const asset of input.assets) {
-      await c.env.DB.prepare(
-        "INSERT INTO assets (path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET is_remote=excluded.is_remote, asset_type=excluded.asset_type, file_type=excluded.file_type, r2_key=excluded.r2_key, checksum=excluded.checksum, size=excluded.size, updated_at=excluded.updated_at",
-      )
+      await db
+        .prepare(
+          "INSERT INTO assets (path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET is_remote=excluded.is_remote, asset_type=excluded.asset_type, file_type=excluded.file_type, r2_key=excluded.r2_key, checksum=excluded.checksum, size=excluded.size, updated_at=excluded.updated_at",
+        )
         .bind(
           asset.path,
           asset.isRemote ? 1 : 0,
@@ -180,9 +189,8 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
 
     // Sync logs
     const now = new Date().toISOString();
-    await c.env.DB.prepare(
-      "INSERT INTO sync_logs (at, post_count, changed, deleted) VALUES (?, ?, ?, ?)",
-    )
+    await db
+      .prepare("INSERT INTO sync_logs (at, post_count, changed, deleted) VALUES (?, ?, ?, ?)")
       .bind(now, input.posts.length, changedHashes.length, deletedPaths.length)
       .run();
 
@@ -195,7 +203,8 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
     }
 
     for (const hash of changedHashes) {
-      const row = await c.env.DB.prepare("SELECT summary, embed_vec FROM ai_results WHERE hash = ?")
+      const row = await db
+        .prepare("SELECT summary, embed_vec FROM ai_results WHERE hash = ?")
         .bind(hash)
         .first<{ summary: string | null; embed_vec: string | null }>();
       const hasSummary =
@@ -234,8 +243,8 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
       }
     }
     if (toEnqueue.length > 0) {
-      await enqueueAiNeeds(c.env, toEnqueue);
-      defer(c, processAiQueue(c.env, 3));
+      await enqueueAiNeeds(c.env, toEnqueue, undefined, db);
+      defer(c, processAiQueue(c.env, 3, undefined, db));
     }
 
     return c.json({
@@ -248,14 +257,15 @@ export function syncRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): 
   });
 
   app.get("/api/sync/log", authMiddleware(["posts.r"]), async (c) => {
-    const result = await c.env.DB.prepare(
-      "SELECT at, post_count, changed, deleted FROM sync_logs ORDER BY at DESC LIMIT 50",
-    ).all<{
-      at: string;
-      post_count: number;
-      changed: number;
-      deleted: number;
-    }>();
+    const db = getDb(c);
+    const result = await db
+      .prepare("SELECT at, post_count, changed, deleted FROM sync_logs ORDER BY at DESC LIMIT 50")
+      .all<{
+        at: string;
+        post_count: number;
+        changed: number;
+        deleted: number;
+      }>();
     const entries = (result.results ?? []).map((row) => ({
       at: row.at,
       postCount: row.post_count,

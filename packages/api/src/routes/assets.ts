@@ -8,6 +8,7 @@ import { errorBody, flattenZodError } from "../utils/errors";
 import { loadEffectiveConfig } from "../utils/config";
 import { createPresignedPutUrl } from "../utils/presign";
 import { authMiddleware } from "../middleware/auth";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
@@ -20,7 +21,8 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
 
     const { key, contentType } = parsed.data;
 
-    const cfg = await loadEffectiveConfig(c.env);
+    const db = getDb(c);
+    const cfg = await loadEffectiveConfig(c.env, db);
     const endpoint = cfg.r2.endpoint;
     const accessKeyId = cfg.r2.accessKeyId;
     const secretAccessKey = cfg.r2.secretAccessKey;
@@ -72,10 +74,12 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
 
     const { path, assetType, fileType, r2Key, checksum, size } = parsed.data;
     const now = new Date().toISOString();
+    const db = getDb(c);
 
-    await c.env.DB.prepare(
-      "INSERT INTO assets (path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET is_remote=excluded.is_remote, asset_type=excluded.asset_type, file_type=excluded.file_type, r2_key=excluded.r2_key, checksum=excluded.checksum, size=excluded.size, updated_at=excluded.updated_at",
-    )
+    await db
+      .prepare(
+        "INSERT INTO assets (path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET is_remote=excluded.is_remote, asset_type=excluded.asset_type, file_type=excluded.file_type, r2_key=excluded.r2_key, checksum=excluded.checksum, size=excluded.size, updated_at=excluded.updated_at",
+      )
       .bind(path, 1, assetType, fileType, r2Key, checksum ?? null, size ?? null, now)
       .run();
 
@@ -83,20 +87,23 @@ export function assetsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
   });
 
   app.get("/api/assets", authMiddleware(["posts.r"]), async (c) => {
-    const result = await c.env.DB.prepare(
-      `SELECT path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at
+    const db = getDb(c);
+    const result = await db
+      .prepare(
+        `SELECT path, is_remote, asset_type, file_type, r2_key, checksum, size, updated_at
        FROM assets
        ORDER BY datetime(updated_at) DESC`,
-    ).all<{
-      path: string;
-      is_remote: number;
-      asset_type: string;
-      file_type: string;
-      r2_key: string | null;
-      checksum: string | null;
-      size: number | null;
-      updated_at: string;
-    }>();
+      )
+      .all<{
+        path: string;
+        is_remote: number;
+        asset_type: string;
+        file_type: string;
+        r2_key: string | null;
+        checksum: string | null;
+        size: number | null;
+        updated_at: string;
+      }>();
 
     const assets = result.results.map((row) => {
       const assetType = AssetTypeSchema.safeParse(row.asset_type);

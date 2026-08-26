@@ -101,6 +101,35 @@ class FakePreparedStatement {
   }
 }
 
+export class FakeD1DatabaseSession {
+  db: FakeD1Database;
+  bookmark: string | null = "fake-bookmark-1";
+
+  constructor(db: FakeD1Database, bookmark?: string) {
+    this.db = db;
+    if (bookmark !== undefined && bookmark !== null && bookmark.length > 0) {
+      this.bookmark = `bm-after-${bookmark}`;
+    }
+  }
+
+  prepare(sql: string): FakePreparedStatement {
+    return this.db.prepare(sql);
+  }
+
+  async batch(statements: FakePreparedStatement[]): Promise<unknown[]> {
+    return this.db.batch(statements);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async exec(sql: string): Promise<unknown> {
+    return this.db.exec(sql);
+  }
+
+  getBookmark(): string | null {
+    return this.bookmark;
+  }
+}
+
 export class FakeD1Database {
   posts = new Map<string, PostRow>();
   aiResults = new Map<string, AiRow>();
@@ -110,6 +139,10 @@ export class FakeD1Database {
   aiQueue = new Map<string, AiQueueRow>();
   syncLogs: SyncLogRow[] = [];
   nextSyncLogId = 1;
+
+  withSession(bookmark?: string): FakeD1DatabaseSession {
+    return new FakeD1DatabaseSession(this, bookmark);
+  }
 
   prepare(sql: string): FakePreparedStatement {
     return new FakePreparedStatement(sql, this);

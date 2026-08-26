@@ -3,6 +3,7 @@ import type { Env } from "../types";
 import type { AiSummaryProvider } from "@hyacine/contract";
 import { loadEffectiveConfig } from "./config";
 import { meanPool, stripFrontmatter } from "./crypto";
+import type { DatabaseClient } from "./db";
 
 /**
  * AI 产物自动队列：
@@ -26,15 +27,26 @@ const MAX_ATTEMPTS = 5;
 const CAPACITY_RETRY_MINUTES = 5;
 const GENERIC_RETRY_MINUTES = 15;
 
+function resolveDb(env: Env, db?: DatabaseClient): DatabaseClient {
+  if (db !== undefined && db !== null) return db;
+  if (env.DB && typeof env.DB.withSession === "function") {
+    return env.DB.withSession("first-primary");
+  }
+  return env.DB;
+}
+
 export async function enqueueAiNeeds(
   env: Env,
   needs: AiNeed[],
   now: Date = new Date(),
+  db?: DatabaseClient,
 ): Promise<void> {
+  const client = resolveDb(env, db);
   const nowIso = now.toISOString();
   for (const n of needs) {
-    await env.DB.prepare(
-      `INSERT INTO ai_queue (hash, path, kind, status, attempts, next_run_at, created_at, updated_at)
+    await client
+      .prepare(
+        `INSERT INTO ai_queue (hash, path, kind, status, attempts, next_run_at, created_at, updated_at)
        VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
        ON CONFLICT(hash) DO UPDATE SET
          path=excluded.path,
@@ -46,7 +58,7 @@ export async function enqueueAiNeeds(
          status='pending',
          next_run_at=excluded.next_run_at,
          updated_at=excluded.updated_at`,
-    )
+      )
       .bind(n.hash, n.path, n.reason, nowIso, nowIso, nowIso)
       .run();
   }
@@ -89,8 +101,10 @@ function extractErrorCode(err: unknown): number | undefined {
 }
 
 /** 取文章正文（自 D1）；无正文返回 null */
-async function loadContentFor(env: Env, path: string): Promise<string | null> {
-  const row = await env.DB.prepare("SELECT content FROM posts WHERE path = ?")
+async function loadContentFor(env: Env, path: string, db?: DatabaseClient): Promise<string | null> {
+  const client = resolveDb(env, db);
+  const row = await client
+    .prepare("SELECT content FROM posts WHERE path = ?")
     .bind(path)
     .first<{ content: string | null }>();
   return row?.content ?? null;
@@ -363,10 +377,13 @@ export async function storeSummaryResult(
   summary: string,
   model: string,
   at: Date,
+  db?: DatabaseClient,
 ): Promise<void> {
-  await env.DB.prepare(
-    "INSERT INTO ai_results (hash, summary, summary_model, summary_at) VALUES (?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET summary=excluded.summary, summary_model=excluded.summary_model, summary_at=excluded.summary_at",
-  )
+  const client = resolveDb(env, db);
+  await client
+    .prepare(
+      "INSERT INTO ai_results (hash, summary, summary_model, summary_at) VALUES (?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET summary=excluded.summary, summary_model=excluded.summary_model, summary_at=excluded.summary_at",
+    )
     .bind(hash, summary, model, at.toISOString())
     .run();
 }
@@ -378,10 +395,13 @@ export async function storeEmbedResult(
   at: Date,
   vector: number[],
   chunks: number,
+  db?: DatabaseClient,
 ): Promise<void> {
-  await env.DB.prepare(
-    "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
-  )
+  const client = resolveDb(env, db);
+  await client
+    .prepare(
+      "INSERT INTO ai_results (hash, embed_model, embed_dim, embed_at, embed_vec, embed_chunks) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET embed_model=excluded.embed_model, embed_dim=excluded.embed_dim, embed_at=excluded.embed_at, embed_vec=excluded.embed_vec, embed_chunks=excluded.embed_chunks",
+    )
     .bind(hash, model, vector.length, at.toISOString(), JSON.stringify(vector), chunks)
     .run();
 }
@@ -410,11 +430,14 @@ export async function processAiQueue(
   env: Env,
   budget = 10,
   now: Date = new Date(),
+  db?: DatabaseClient,
 ): Promise<ProcessSummary[]> {
-  const cfg = await loadEffectiveConfig(env);
-  const rows = await env.DB.prepare(
-    "SELECT hash, path, kind, status, attempts, next_run_at, last_error FROM ai_queue WHERE status IN ('pending','waiting') AND next_run_at <= ? ORDER BY next_run_at LIMIT ?",
-  )
+  const client = resolveDb(env, db);
+  const cfg = await loadEffectiveConfig(env, client);
+  const rows = await client
+    .prepare(
+      "SELECT hash, path, kind, status, attempts, next_run_at, last_error FROM ai_queue WHERE status IN ('pending','waiting') AND next_run_at <= ? ORDER BY next_run_at LIMIT ?",
+    )
     .bind(now.toISOString(), budget)
     .all<QueueRow>();
 
@@ -434,6 +457,7 @@ export async function processAiQueue(
         summaryModel,
         embedModel,
         now,
+        client,
       ),
     );
   }
@@ -449,18 +473,19 @@ async function processOne(
   summaryModel: string,
   embedModel: string,
   now: Date,
+  db: DatabaseClient,
 ): Promise<ProcessSummary> {
   const base: ProcessSummary = { hash: row.hash, kind: row.kind, outcome: "failed" };
   // 防重入：处理中置锁
-  await env.DB.prepare("UPDATE ai_queue SET status='processing', updated_at=? WHERE hash = ?")
+  await db
+    .prepare("UPDATE ai_queue SET status='processing', updated_at=? WHERE hash = ?")
     .bind(now.toISOString(), row.hash)
     .run();
 
-  const content = await loadContentFor(env, row.path);
+  const content = await loadContentFor(env, row.path, db);
   if (content === null || content.length === 0) {
-    await env.DB.prepare(
-      "UPDATE ai_queue SET status='failed', last_error=?, updated_at=? WHERE hash = ?",
-    )
+    await db
+      .prepare("UPDATE ai_queue SET status='failed', last_error=?, updated_at=? WHERE hash = ?")
       .bind("无正文(posts.content 为空)", now.toISOString(), row.hash)
       .run();
     return { ...base, outcome: "no_content", error: "post content missing" };
@@ -473,47 +498,59 @@ async function processOne(
         provider === "workers-ai"
           ? await generateSummaryWorkersAi(env, summaryModel, stripped)
           : await generateSummaryByok(byokEndpoint, byokKey, summaryModel, stripped);
-      await storeSummaryResult(env, row.hash, summary, summaryModel, now);
+      await storeSummaryResult(env, row.hash, summary, summaryModel, now, db);
     }
     if (row.kind === "embed" || row.kind === "both") {
       const vector = await generateEmbed(env, embedModel, stripped);
-      await storeEmbedResult(env, row.hash, embedModel, now, vector, chunkText(stripped).length);
+      await storeEmbedResult(
+        env,
+        row.hash,
+        embedModel,
+        now,
+        vector,
+        chunkText(stripped).length,
+        db,
+      );
     }
-    await env.DB.prepare("DELETE FROM ai_queue WHERE hash = ?").bind(row.hash).run();
+    await db.prepare("DELETE FROM ai_queue WHERE hash = ?").bind(row.hash).run();
     return { ...base, outcome: "done" };
   } catch (error) {
     const kind = classifyAiError(error);
     const msg = error instanceof Error ? error.message : String(error);
     const attempts = row.attempts + 1;
     if (kind === "quota") {
-      await env.DB.prepare(
-        "UPDATE ai_queue SET status='waiting', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
-      )
+      await db
+        .prepare(
+          "UPDATE ai_queue SET status='waiting', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
+        )
         .bind(attempts, msg, nextQuotaRetryAt(now), now.toISOString(), row.hash)
         .run();
       return { ...base, outcome: "waiting", error: msg };
     }
     if (kind === "capacity") {
       const retryAt = new Date(now.getTime() + CAPACITY_RETRY_MINUTES * 60_000).toISOString();
-      await env.DB.prepare(
-        "UPDATE ai_queue SET status='pending', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
-      )
+      await db
+        .prepare(
+          "UPDATE ai_queue SET status='pending', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
+        )
         .bind(attempts, msg, retryAt, now.toISOString(), row.hash)
         .run();
       return { ...base, outcome: "retry", error: msg };
     }
     if (attempts >= MAX_ATTEMPTS) {
-      await env.DB.prepare(
-        "UPDATE ai_queue SET status='failed', attempts=?, last_error=?, updated_at=? WHERE hash = ?",
-      )
+      await db
+        .prepare(
+          "UPDATE ai_queue SET status='failed', attempts=?, last_error=?, updated_at=? WHERE hash = ?",
+        )
         .bind(attempts, msg, now.toISOString(), row.hash)
         .run();
       return { ...base, outcome: "failed", error: msg };
     }
     const retryAt = new Date(now.getTime() + GENERIC_RETRY_MINUTES * 60_000).toISOString();
-    await env.DB.prepare(
-      "UPDATE ai_queue SET status='pending', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
-    )
+    await db
+      .prepare(
+        "UPDATE ai_queue SET status='pending', attempts=?, last_error=?, next_run_at=?, updated_at=? WHERE hash = ?",
+      )
       .bind(attempts, msg, retryAt, now.toISOString(), row.hash)
       .run();
     return { ...base, outcome: "retry", error: msg };

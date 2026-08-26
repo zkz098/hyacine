@@ -3,6 +3,7 @@ import type { Context, Next } from "hono";
 import { sha256Hex } from "../utils/crypto";
 import { errorBody } from "../utils/errors";
 import { defer } from "../utils/defer";
+import { getDb } from "../utils/db";
 import type { Env, Variables } from "../types";
 
 export function authMiddleware(requiredScopes: string[] = []) {
@@ -16,9 +17,11 @@ export function authMiddleware(requiredScopes: string[] = []) {
       return c.json(errorBody("unauthorized", "缺少 Bearer token"), 401);
     }
     const tokenHash = await sha256Hex(token);
-    const row = await c.env.DB.prepare(
-      "SELECT token_hash, label, scopes, expires_at, revoked FROM api_tokens WHERE token_hash = ?",
-    )
+    const db = getDb(c);
+    const row = await db
+      .prepare(
+        "SELECT token_hash, label, scopes, expires_at, revoked FROM api_tokens WHERE token_hash = ?",
+      )
       .bind(tokenHash)
       .first<{
         token_hash: string;
@@ -63,7 +66,8 @@ export function authMiddleware(requiredScopes: string[] = []) {
     const now = new Date().toISOString();
     defer(
       c,
-      c.env.DB.prepare("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?")
+      db
+        .prepare("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?")
         .bind(now, tokenHash)
         .run()
         .catch(() => {

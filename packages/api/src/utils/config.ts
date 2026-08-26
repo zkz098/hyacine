@@ -1,5 +1,6 @@
 import type { CloudConfig } from "@hyacine/contract";
 import type { Env } from "../types";
+import type { DatabaseClient } from "./db";
 
 /**
  * 动态配置读取层：env 为默认值，D1 app_config 覆盖。
@@ -25,7 +26,10 @@ function parseConfigCache(cached: string): Record<string, string> | null {
   }
 }
 
-export async function loadConfigOverrides(env: Env): Promise<Record<string, string>> {
+export async function loadConfigOverrides(
+  env: Env,
+  db?: DatabaseClient,
+): Promise<Record<string, string>> {
   if (env.CACHE !== undefined) {
     try {
       const cached = await env.CACHE.get(CFG_KV_KEY);
@@ -38,7 +42,8 @@ export async function loadConfigOverrides(env: Env): Promise<Record<string, stri
     }
   }
 
-  const rows = await env.DB.prepare("SELECT key, value FROM app_config").all<{
+  const client = db ?? env.DB;
+  const rows = await client.prepare("SELECT key, value FROM app_config").all<{
     key: string;
     value: string;
   }>();
@@ -113,7 +118,7 @@ export async function invalidateConfigCache(env: Env): Promise<void> {
 }
 
 /** api/token 鉴权外的受保护配置路由用：直接拿覆盖 map + 有效配置 */
-export async function loadEffectiveConfig(env: Env): Promise<CloudConfig> {
-  const overrides = await loadConfigOverrides(env);
+export async function loadEffectiveConfig(env: Env, db?: DatabaseClient): Promise<CloudConfig> {
+  const overrides = await loadConfigOverrides(env, db);
   return effectiveConfig(env, overrides);
 }
