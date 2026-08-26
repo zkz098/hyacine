@@ -2,11 +2,12 @@ import { createSignal, For, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { t } from "../i18n";
 import { autoSlug, getCollections } from "@hyacine/contract";
-import { isTauri, openFolderDialog, writeTextFile } from "../tauri/bridge";
+import { isTauri, openFolderDialog, writeTextFile, removeFile } from "../tauri/bridge";
 import { projectStore } from "../store/project";
 import { Alert } from "../components/Alert";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
+import { Modal } from "../components/Modal";
 import { Badge } from "../components/Badge";
 import { Card } from "../components/Card";
 import { PageHeader } from "../components/PageHeader";
@@ -27,6 +28,75 @@ export function Workspace(): import("solid-js").JSX.Element {
   const navigate = useNavigate();
   const [filter, setFilter] = createSignal("");
   const [activeCollection, setActiveCollection] = createSignal<string>("all");
+
+  // 多选与删除状态
+  const [selectedPaths, setSelectedPaths] = createSignal<string[]>([]);
+  const [deleting, setDeleting] = createSignal(false);
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false);
+  const [pathsToDelete, setPathsToDelete] = createSignal<string[]>([]);
+
+  const isSelected = (path: string): boolean => selectedPaths().includes(path);
+  const toggleSelect = (path: string): void => {
+    if (isSelected(path)) {
+      setSelectedPaths(selectedPaths().filter((p) => p !== path));
+    } else {
+      setSelectedPaths([...selectedPaths(), path]);
+    }
+  };
+  const toggleSelectAll = (): void => {
+    const visible = filteredPosts().map((p) => p.path);
+    if (visible.every((p) => selectedPaths().includes(p))) {
+      setSelectedPaths(selectedPaths().filter((p) => !visible.includes(p)));
+    } else {
+      const next = new Set([...selectedPaths(), ...visible]);
+      setSelectedPaths(Array.from(next));
+    }
+  };
+  const clearSelection = (): void => {
+    setSelectedPaths([]);
+  };
+
+  const promptDeleteSingle = (path: string): void => {
+    setPathsToDelete([path]);
+    setShowDeleteModal(true);
+  };
+
+  const promptDeleteBatch = (): void => {
+    if (selectedPaths().length === 0) return;
+    setPathsToDelete([...selectedPaths()]);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async (): Promise<void> => {
+    const dir = projectStore.projectDir();
+    if (dir === null) return;
+    const targets = pathsToDelete();
+    if (targets.length === 0) return;
+    setDeleting(true);
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (const p of targets) {
+      try {
+        const full = `${dir}/${p}`;
+        await removeFile(full);
+        successCount++;
+      } catch (e: unknown) {
+        errors.push(`${p}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    setDeleting(false);
+    setShowDeleteModal(false);
+    setSelectedPaths(selectedPaths().filter((p) => !targets.includes(p)));
+    await projectStore.refreshPosts();
+
+    if (errors.length > 0) {
+      toast.error(`删除遇到错误：${errors.join("; ")}`, "部分删除失败");
+    } else {
+      toast.success(`已成功删除 ${successCount} 个文章文件`, "文章已删除");
+    }
+  };
 
   const handleOpen = async (): Promise<void> => {
     try {
@@ -244,6 +314,31 @@ export function Workspace(): import("solid-js").JSX.Element {
             </Show>
           </div>
 
+          {/* Batch Selection Action Bar */}
+          <Show when={selectedPaths().length > 0}>
+            <div class="flex items-center justify-between p-2.5 bg-[var(--g-2)] border border-[var(--border)] rounded-[6px] text-xs shadow-xs">
+              <div class="flex items-center gap-2">
+                <span class="i-ri-checkbox-circle-fill text-base text-[var(--accent)]" />
+                <span class="font-medium text-[var(--text)]">
+                  {t("workspace.selectedCount", { count: String(selectedPaths().length) })}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <Button variant="outline" size="xs" onClick={clearSelection}>
+                  {t("workspace.clearSelection")}
+                </Button>
+                <Button
+                  variant="danger"
+                  size="xs"
+                  icon="i-ri-delete-bin-line"
+                  onClick={promptDeleteBatch}
+                >
+                  {t("workspace.batchDelete")}
+                </Button>
+              </div>
+            </div>
+          </Show>
+
           <Show when={projectStore.loading()}>
             <div class="p-8 flex items-center justify-center gap-2 text-[var(--muted)]">
               <Spinner size="sm" />
@@ -283,18 +378,40 @@ export function Workspace(): import("solid-js").JSX.Element {
                 <Table>
                   <TableHead>
                     <TableRow hoverable={false}>
-                      <TableHeader class="w-[35%]">文章标题与文件</TableHeader>
+                      <TableHeader class="w-[4%]">
+                        <input
+                          type="checkbox"
+                          checked={
+                            filteredPosts().length > 0 &&
+                            filteredPosts().every((p) => selectedPaths().includes(p.path))
+                          }
+                          onChange={toggleSelectAll}
+                          class="rounded text-[var(--accent)] cursor-pointer"
+                          aria-label="全选"
+                        />
+                      </TableHeader>
+                      <TableHeader class="w-[33%]">文章标题与文件</TableHeader>
                       <TableHeader class="w-[12%]">集合</TableHeader>
-                      <TableHeader class="w-[18%]">Slug</TableHeader>
+                      <TableHeader class="w-[17%]">Slug</TableHeader>
                       <TableHeader class="w-[12%]">状态</TableHeader>
                       <TableHeader class="w-[10%]">AI 摘要</TableHeader>
-                      <TableHeader class="w-[13%] text-right">操作</TableHeader>
+                      <TableHeader class="w-[12%] text-right">操作</TableHeader>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     <For each={filteredPosts()}>
                       {(post) => (
                         <TableRow>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={isSelected(post.path)}
+                              onChange={() => toggleSelect(post.path)}
+                              class="rounded text-[var(--accent)] cursor-pointer"
+                              aria-label={`选择文章 ${post.title}`}
+                            />
+                          </TableCell>
+
                           <TableCell>
                             <div class="flex flex-col gap-0.5">
                               <span class="font-medium text-[var(--text)]">{post.title}</span>
@@ -338,14 +455,24 @@ export function Workspace(): import("solid-js").JSX.Element {
                           </TableCell>
 
                           <TableCell class="text-right">
-                            <Button
-                              variant="secondary"
-                              size="xs"
-                              icon="i-ri-edit-box-line"
-                              onClick={() => handleEdit(post.path)}
-                            >
-                              {t("workspace.edit")}
-                            </Button>
+                            <div class="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="secondary"
+                                size="xs"
+                                icon="i-ri-edit-box-line"
+                                onClick={() => handleEdit(post.path)}
+                              >
+                                {t("workspace.edit")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                class="text-[var(--danger)] hover:bg-[var(--danger)]/10"
+                                icon="i-ri-delete-bin-line"
+                                onClick={() => promptDeleteSingle(post.path)}
+                                title={t("workspace.delete")}
+                              />
+                            </div>
                           </TableCell>
                         </TableRow>
                       )}
@@ -355,6 +482,56 @@ export function Workspace(): import("solid-js").JSX.Element {
               </TableContainer>
             </Show>
           </Show>
+
+          {/* 删除确认弹窗 */}
+          <Modal
+            open={showDeleteModal()}
+            onClose={() => setShowDeleteModal(false)}
+            title={t("workspace.deleteConfirmTitle")}
+            description={t("workspace.deleteConfirmMsg", { count: String(pathsToDelete().length) })}
+            size="md"
+            footer={
+              <div class="flex items-center justify-end gap-2 w-full">
+                <Button variant="outline" size="sm" onClick={() => setShowDeleteModal(false)}>
+                  取消
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  loading={deleting()}
+                  icon="i-ri-delete-bin-line"
+                  onClick={() => void confirmDelete()}
+                >
+                  确认删除 ({pathsToDelete().length})
+                </Button>
+              </div>
+            }
+          >
+            <div class="max-h-60 overflow-y-auto flex flex-col border border-[var(--border)] rounded-[4px] bg-[var(--g-1)] divide-y divide-[var(--border)]">
+              <For each={pathsToDelete()}>
+                {(p) => {
+                  const post = projectStore.posts().find((item) => item.path === p);
+                  return (
+                    <div class="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                      <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <span class="font-medium text-[var(--text)] leading-normal truncate">
+                          {post?.title || p}
+                        </span>
+                        <span class="font-mono text-[11px] text-[var(--muted)] leading-normal truncate">
+                          {p}
+                        </span>
+                      </div>
+                      <Show when={post}>
+                        <Badge variant={post?.draft ? "warning" : "success"} size="sm">
+                          {post?.draft ? "草稿" : "已发布"}
+                        </Badge>
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </Modal>
         </div>
       </Show>
     </div>

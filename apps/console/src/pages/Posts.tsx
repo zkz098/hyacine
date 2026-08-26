@@ -48,6 +48,60 @@ export function Posts(): import("solid-js").JSX.Element {
     return res.posts;
   });
 
+  // 多选与删除状态
+  const [selectedPaths, setSelectedPaths] = createSignal<string[]>([]);
+  const [deleting, setDeleting] = createSignal(false);
+  const [showDeleteModal, setShowDeleteModal] = createSignal(false);
+  const [pathsToDelete, setPathsToDelete] = createSignal<string[]>([]);
+
+  const isSelected = (path: string): boolean => selectedPaths().includes(path);
+  const toggleSelect = (path: string): void => {
+    if (isSelected(path)) {
+      setSelectedPaths(selectedPaths().filter((p) => p !== path));
+    } else {
+      setSelectedPaths([...selectedPaths(), path]);
+    }
+  };
+  const toggleSelectAll = (visiblePaths: string[]): void => {
+    if (visiblePaths.every((p) => selectedPaths().includes(p))) {
+      setSelectedPaths(selectedPaths().filter((p) => !visiblePaths.includes(p)));
+    } else {
+      const next = new Set([...selectedPaths(), ...visiblePaths]);
+      setSelectedPaths(Array.from(next));
+    }
+  };
+  const clearSelection = (): void => {
+    setSelectedPaths([]);
+  };
+
+  const promptDeleteSingle = (path: string): void => {
+    setPathsToDelete([path]);
+    setShowDeleteModal(true);
+  };
+
+  const promptDeleteBatch = (): void => {
+    if (selectedPaths().length === 0) return;
+    setPathsToDelete([...selectedPaths()]);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async (): Promise<void> => {
+    const targets = pathsToDelete();
+    if (targets.length === 0) return;
+    setDeleting(true);
+    try {
+      const res = await apiStore.getClient().deletePosts({ paths: targets });
+      toast.success(`已成功从云端下架删除 ${res.deletedCount} 篇文章`, "云端文章已删除");
+      setSelectedPaths(selectedPaths().filter((p) => !targets.includes(p)));
+      setShowDeleteModal(false);
+      await refetch();
+    } catch (err: unknown) {
+      toast.error(messageOf(err), "删除云端文章失败");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   // 远程编辑 / 查看模式
   type ModalViewMode = "preview" | "source" | "split";
   const [modalMode, setModalMode] = createSignal<ModalViewMode>("preview");
@@ -279,6 +333,31 @@ export function Posts(): import("solid-js").JSX.Element {
         </div>
       </Show>
 
+      {/* Batch Selection Action Bar */}
+      <Show when={selectedPaths().length > 0}>
+        <div class="flex items-center justify-between p-2.5 bg-[var(--g-2)] border border-[var(--border)] rounded-[6px] text-xs shadow-xs">
+          <div class="flex items-center gap-2">
+            <span class="i-ri-checkbox-circle-fill text-base text-[var(--accent)]" />
+            <span class="font-medium text-[var(--text)]">
+              {t("workspace.selectedCount", { count: String(selectedPaths().length) })}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="xs" onClick={clearSelection}>
+              {t("workspace.clearSelection")}
+            </Button>
+            <Button
+              variant="danger"
+              size="xs"
+              icon="i-ri-delete-bin-line"
+              onClick={promptDeleteBatch}
+            >
+              {t("posts.batchDelete")}
+            </Button>
+          </div>
+        </div>
+      </Show>
+
       {/* Posts Table */}
       <Show when={filtered()}>
         {(list) => (
@@ -300,11 +379,23 @@ export function Posts(): import("solid-js").JSX.Element {
               <Table>
                 <TableHead>
                   <TableRow hoverable={false}>
-                    <TableHeader class="w-[28%]">标题与路径</TableHeader>
+                    <TableHeader class="w-[4%]">
+                      <input
+                        type="checkbox"
+                        checked={
+                          list().length > 0 &&
+                          list().every((p) => selectedPaths().includes(p.path))
+                        }
+                        onChange={() => toggleSelectAll(list().map((p) => p.path))}
+                        class="rounded text-[var(--accent)] cursor-pointer"
+                        aria-label="全选"
+                      />
+                    </TableHeader>
+                    <TableHeader class="w-[26%]">标题与路径</TableHeader>
                     <TableHeader class="w-[10%]">集合</TableHeader>
-                    <TableHeader class="w-[14%]">Slug</TableHeader>
+                    <TableHeader class="w-[13%]">Slug</TableHeader>
                     <TableHeader class="w-[10%]">状态</TableHeader>
-                    <TableHeader class="w-[12%]">分类</TableHeader>
+                    <TableHeader class="w-[11%]">分类</TableHeader>
                     <TableHeader class="w-[12%]">AI 产物</TableHeader>
                     <TableHeader class="w-[14%] text-right">操作</TableHeader>
                   </TableRow>
@@ -313,6 +404,16 @@ export function Posts(): import("solid-js").JSX.Element {
                   <For each={list()}>
                     {(post) => (
                       <TableRow>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={isSelected(post.path)}
+                            onChange={() => toggleSelect(post.path)}
+                            class="rounded text-[var(--accent)] cursor-pointer"
+                            aria-label={`选择文章 ${post.title}`}
+                          />
+                        </TableCell>
+
                         <TableCell>
                           <div class="flex flex-col gap-0.5">
                             <span class="font-medium text-[var(--text)]" title={post.hash}>
@@ -418,6 +519,15 @@ export function Posts(): import("solid-js").JSX.Element {
                             >
                               {primaryAvailable() ? t("posts.editRemote") : t("posts.viewReadOnly")}
                             </Button>
+
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              class="text-[var(--danger)] hover:bg-[var(--danger)]/10"
+                              icon="i-ri-delete-bin-line"
+                              onClick={() => promptDeleteSingle(post.path)}
+                              title={t("posts.delete")}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -563,6 +673,56 @@ export function Posts(): import("solid-js").JSX.Element {
               )}
             </div>
           </Show>
+        </div>
+      </Modal>
+
+      {/* 云端删除确认弹窗 */}
+      <Modal
+        open={showDeleteModal()}
+        onClose={() => setShowDeleteModal(false)}
+        title={t("posts.deleteConfirmTitle")}
+        description={t("posts.deleteConfirmMsg", { count: String(pathsToDelete().length) })}
+        size="md"
+        footer={
+          <div class="flex items-center justify-end gap-2 w-full">
+            <Button variant="outline" size="sm" onClick={() => setShowDeleteModal(false)}>
+              取消
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              loading={deleting()}
+              icon="i-ri-delete-bin-line"
+              onClick={() => void confirmDelete()}
+            >
+              确认从云端删除 ({pathsToDelete().length})
+            </Button>
+          </div>
+        }
+      >
+        <div class="max-h-60 overflow-y-auto flex flex-col border border-[var(--border)] rounded-[4px] bg-[var(--g-1)] divide-y divide-[var(--border)]">
+          <For each={pathsToDelete()}>
+            {(p) => {
+              const post = posts()?.find((item) => item.path === p);
+              return (
+                <div class="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                  <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <span class="font-medium text-[var(--text)] leading-normal truncate">
+                      {post?.title || p}
+                    </span>
+                    <span class="font-mono text-[11px] text-[var(--muted)] leading-normal truncate">
+                      {p}
+                    </span>
+                  </div>
+                  <Show when={post}>
+                    <Badge variant={post?.draft ? "warning" : "success"} size="sm">
+                      {post?.draft ? "草稿" : "已发布"}
+                    </Badge>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
         </div>
       </Modal>
     </div>

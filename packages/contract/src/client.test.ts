@@ -231,4 +231,28 @@ describe("HyacineClient", () => {
     await expect(promise).rejects.toBeInstanceOf(HyacineApiError);
     await expect(promise).rejects.toMatchObject({ code: "bad_request", details: { field: "key" } });
   });
+
+  it("deletePosts 走 DELETE /api/posts 并返回已删除路径与计数", async () => {
+    const { fetchMock, calls } = makeFetchMock(() =>
+      jsonResponse(200, {
+        deletedCount: 2,
+        deletedPaths: ["src/posts/a.md", "src/posts/b.md"],
+      }),
+    );
+    const client = new HyacineClient({
+      baseUrl: "https://api.example.com",
+      token: "tok-w",
+      fetch: fetchMock,
+    });
+
+    const res = await client.deletePosts({ paths: ["src/posts/a.md", "src/posts/b.md"] });
+    expect(res.deletedCount).toBe(2);
+    expect(res.deletedPaths).toEqual(["src/posts/a.md", "src/posts/b.md"]);
+    expect(calls[0]?.url).toBe("https://api.example.com/api/posts");
+    expect(calls[0]?.init?.method).toBe("DELETE");
+    expect(bodyOf(calls[0]?.init)).toEqual({
+      paths: ["src/posts/a.md", "src/posts/b.md"],
+    });
+  });
 });
+

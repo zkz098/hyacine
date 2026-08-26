@@ -15,4 +15,9 @@ describe("tauri bridge", () => {
     const { openFolderDialog } = await import("./bridge");
     await expect(openFolderDialog()).rejects.toThrow("require_tauri");
   });
+
+  it("removeFile 在非 tauri 抛错", async () => {
+    const { removeFile } = await import("./bridge");
+    await expect(removeFile("/tmp/x")).rejects.toThrow("require_tauri");
+  });
 });

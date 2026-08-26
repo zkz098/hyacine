@@ -77,3 +77,19 @@ export const PostsListResponseSchema = z.object({
 });
 
 export type PostsListResponse = z.infer<typeof PostsListResponseSchema>;
+
+/** 删除/批量删除文章请求（云端 posts.w） */
+export const PostDeleteRequestSchema = z.object({
+  paths: z.array(PostPathSchema).min(1).max(500),
+});
+
+export type PostDeleteRequest = z.infer<typeof PostDeleteRequestSchema>;
+
+/** 删除/批量删除文章响应 */
+export const PostDeleteResponseSchema = z.object({
+  deletedCount: z.number().int().nonnegative(),
+  deletedPaths: z.array(PostPathSchema),
+});
+
+export type PostDeleteResponse = z.infer<typeof PostDeleteResponseSchema>;
+

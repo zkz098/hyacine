@@ -38,7 +38,11 @@ import {
   PostUpsertResponseSchema,
 } from "./schemas/git";
 import { StatsResponseSchema } from "./schemas/stats";
-import { PostsListResponseSchema } from "./schemas/post";
+import {
+  PostDeleteRequestSchema,
+  PostDeleteResponseSchema,
+  PostsListResponseSchema,
+} from "./schemas/post";
 import {
   SyncLogResponseSchema,
   SyncUploadRequestSchema,
@@ -169,6 +173,18 @@ export class HyacineClient {
 
   async postsList(): Promise<z.infer<typeof PostsListResponseSchema>> {
     return this.#request(PostsListResponseSchema, "GET", "/api/posts");
+  }
+
+  async deletePosts(
+    req: z.infer<typeof PostDeleteRequestSchema>,
+  ): Promise<z.infer<typeof PostDeleteResponseSchema>> {
+    return this.#request(
+      PostDeleteResponseSchema,
+      "DELETE",
+      "/api/posts",
+      req,
+      PostDeleteRequestSchema,
+    );
   }
 
   // ---- ai -------------------------------------------------------------

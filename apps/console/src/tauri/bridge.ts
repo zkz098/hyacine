@@ -49,6 +49,12 @@ export async function writeTextFile(path: string, content: string): Promise<void
   return wtf(path, content);
 }
 
+export async function removeFile(path: string): Promise<void> {
+  if (!isTauri()) requireTauri();
+  const { remove } = await import("@tauri-apps/plugin-fs");
+  return remove(path);
+}
+
 export async function readDirRecursive(dir: string): Promise<string[]> {
   if (!isTauri()) requireTauri();
   const { readDir } = await import("@tauri-apps/plugin-fs");

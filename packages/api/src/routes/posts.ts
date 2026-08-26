@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../middleware/auth";
+import { errorBody, flattenZodError } from "../utils/errors";
 import type { Env, Variables } from "../types";
-import type { PostListItem } from "@hyacine/contract";
+import { type PostListItem, PostDeleteRequestSchema } from "@hyacine/contract";
 
 interface PostJoinRow {
   path: string;
@@ -64,7 +65,7 @@ function toListItem(row: PostJoinRow): PostListItem {
   };
 }
 
-/** 只读查询：文章索引 + AI 产物状态（console 用，posts.r）
+/** 只读查询与删除：文章索引 + AI 产物状态（console 用）
  * 支持 ?prefix=<repo-相对目录> 按集合过滤（如 prefix=src/moments）。
  */
 export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>): void {
@@ -89,4 +90,24 @@ export function postsRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>):
     const posts = result.results.map((row) => toListItem(row));
     return c.json({ posts });
   });
+
+  app.delete("/api/posts", authMiddleware(["posts.w"]), async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = PostDeleteRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(errorBody("validation_error", "参数错误", flattenZodError(parsed.error)), 400);
+    }
+    const { paths } = parsed.data;
+    const now = new Date().toISOString();
+    for (const path of paths) {
+      await c.env.DB.prepare("UPDATE posts SET deleted_at = ? WHERE path = ?")
+        .bind(now, path)
+        .run();
+    }
+    return c.json({
+      deletedCount: paths.length,
+      deletedPaths: paths,
+    });
+  });
 }
+

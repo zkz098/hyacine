@@ -20,6 +20,7 @@ import { SegmentedControl } from "../components/SegmentedControl";
 import { Spinner } from "../components/Spinner";
 import { toast } from "../components/Toast";
 import { ShokaxToolbar } from "../editor/ShokaxToolbar";
+import { createEditorHistory } from "../editor/history";
 import { renderPreview } from "../editor/preview";
 import { loadEnabledPlugins } from "../editor/syntax/pluginSettings";
 import { loadProjectSyntaxPlugins } from "../editor/syntax/projectPlugins";
@@ -59,6 +60,7 @@ export function Editor(): import("solid-js").JSX.Element {
   const [searchParams] = useSearchParams();
   const path = (): string => (searchParams.path as string | undefined) ?? "";
 
+  const history = createEditorHistory();
   const [raw, setRaw] = createSignal<string | null>(null);
   const [frontData, setFrontData] = createSignal<Record<string, unknown>>({});
   const [body, setBody] = createSignal("");
@@ -138,6 +140,9 @@ export function Editor(): import("solid-js").JSX.Element {
   };
 
   const handleSourceInput = (value: string): void => {
+    const start = taEl?.selectionStart ?? value.length;
+    const end = taEl?.selectionEnd ?? value.length;
+    history.record(value, start, end);
     setBody(value);
     setDirty(true);
     if (debounceId !== undefined) clearTimeout(debounceId);
@@ -152,15 +157,57 @@ export function Editor(): import("solid-js").JSX.Element {
     const cur = body();
     const start = taEl?.selectionStart ?? cur.length;
     const end = taEl?.selectionEnd ?? start;
+    history.record(cur, start, end);
     const next = cur.slice(0, start) + text + cur.slice(end);
+    const pos = start + text.length;
+    history.record(next, pos, pos, { force: true });
     setBody(next);
     setDirty(true);
     setSourceImmediate(next);
-    const pos = start + text.length;
     requestAnimationFrame(() => {
       taEl?.focus();
       taEl?.setSelectionRange(pos, pos);
     });
+  };
+
+  const handleUndo = (): void => {
+    const snapshot = history.undo();
+    if (snapshot === null) return;
+    setBody(snapshot.text);
+    setDirty(true);
+    setSourceImmediate(snapshot.text);
+    requestAnimationFrame(() => {
+      taEl?.focus();
+      taEl?.setSelectionRange(snapshot.cursorStart, snapshot.cursorEnd);
+    });
+  };
+
+  const handleRedo = (): void => {
+    const snapshot = history.redo();
+    if (snapshot === null) return;
+    setBody(snapshot.text);
+    setDirty(true);
+    setSourceImmediate(snapshot.text);
+    requestAnimationFrame(() => {
+      taEl?.focus();
+      taEl?.setSelectionRange(snapshot.cursorStart, snapshot.cursorEnd);
+    });
+  };
+
+  const handleEditorKeyDown = (e: KeyboardEvent): void => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if (e.key === "y" || e.key === "Y") {
+        e.preventDefault();
+        handleRedo();
+      }
+    }
   };
 
   const fullPath = (): string | null => {
@@ -219,6 +266,7 @@ export function Editor(): import("solid-js").JSX.Element {
       setFrontData(parsed.data);
       setBody(parsed.content);
       setSourceImmediate(parsed.content);
+      history.reset(parsed.content);
       setFmRawText(parsed.matter);
       setTitle(typeof parsed.data.title === "string" ? parsed.data.title : "");
       setSlug(typeof parsed.data.slug === "string" ? parsed.data.slug : "");
@@ -493,6 +541,7 @@ export function Editor(): import("solid-js").JSX.Element {
       setBody(reparsed.content);
       setFmRawText(reparsed.matter);
       setSourceImmediate(reparsed.content);
+      history.reset(reparsed.content);
       setDirty(false);
       toast.success(t("editor.aiDone"));
       await projectStore.refreshPosts();
@@ -780,6 +829,29 @@ export function Editor(): import("solid-js").JSX.Element {
                   </button>
                 </Show>
                 <div class="h-4 w-px bg-[var(--border)] mx-1" />
+                <div class="flex items-center gap-0.5 border border-[var(--border)] rounded p-1 bg-[var(--surface)]">
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    disabled={!history.canUndo()}
+                    title={t("editor.undo")}
+                    class="px-2 py-1 rounded text-xs text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--muted)] disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <span class="i-ri-arrow-go-back-line text-xs" />
+                    <span>撤销</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRedo}
+                    disabled={!history.canRedo()}
+                    title={t("editor.redo")}
+                    class="px-2 py-1 rounded text-xs text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--text)] disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--muted)] disabled:cursor-not-allowed flex items-center gap-1 transition-colors"
+                  >
+                    <span class="i-ri-arrow-go-forward-line text-xs" />
+                    <span>重做</span>
+                  </button>
+                </div>
+                <div class="h-4 w-px bg-[var(--border)] mx-1" />
                 <ShokaxToolbar insertText={insertSnippet} />
               </div>
 
@@ -817,6 +889,7 @@ export function Editor(): import("solid-js").JSX.Element {
                     }}
                     value={body()}
                     onInput={(e) => handleSourceInput(e.currentTarget.value)}
+                    onKeyDown={handleEditorKeyDown}
                     onScroll={handleEditorScroll}
                     class="w-full flex-1 p-4 bg-[var(--bg)] font-mono text-xs sm:text-sm leading-relaxed resize-none overflow-y-auto focus:outline-none focus:ring-0 text-[var(--text)] selection:bg-[var(--accent)] selection:text-white"
                     spellcheck={false}

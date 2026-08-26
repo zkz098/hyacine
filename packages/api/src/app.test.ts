@@ -1169,6 +1169,38 @@ describe("posts 查询", () => {
     ).json()) as { posts: Array<{ path: string }> };
     expect(moments.posts.map((p) => p.path)).toEqual(["src/moments/beautiful-day.md"]);
   });
+
+  it("DELETE /api/posts 软删除指定文章并在列表中过滤", async () => {
+    const env = createTestEnv();
+    const token = await setupAdminToken(env);
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified) VALUES (?, ?, ?, 0, '[]', ?, ?, ?, ?)",
+    )
+      .bind("src/posts/del-1.md", "del-1", "Delete Me 1", "hash1", now, now, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO posts (path, slug, title, draft, categories, hash, created_at, updated_at, last_modified) VALUES (?, ?, ?, 0, '[]', ?, ?, ?, ?)",
+    )
+      .bind("src/posts/del-2.md", "del-2", "Delete Me 2", "hash2", now, now, now)
+      .run();
+
+    const delRes = await request(
+      env,
+      "DELETE",
+      "/api/posts",
+      { paths: ["src/posts/del-1.md"] },
+      token,
+    );
+    expect(delRes.status).toBe(200);
+    const delJson = (await delRes.json()) as { deletedCount: number; deletedPaths: string[] };
+    expect(delJson.deletedCount).toBe(1);
+    expect(delJson.deletedPaths).toEqual(["src/posts/del-1.md"]);
+
+    const listRes = await request(env, "GET", "/api/posts", undefined, token);
+    const listJson = (await listRes.json()) as { posts: Array<{ path: string }> };
+    expect(listJson.posts.map((p) => p.path)).toEqual(["src/posts/del-2.md"]);
+  });
 });
 
 describe("assets 查询", () => {
