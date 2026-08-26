@@ -75,7 +75,28 @@ export function Settings(): import("solid-js").JSX.Element {
   const [healthLoading, setHealthLoading] = createSignal(false);
 
   const [theme, setThemeSignal] = createSignal(apiStore.state.theme);
-  const [gitVer, setGitVer] = createSignal<string | null>(null);
+  const [gitVer, setGitVer] = createSignal<string>("检测中...");
+  const [checkingGit, setCheckingGit] = createSignal(false);
+
+  const checkGit = async (): Promise<void> => {
+    if (!isTauri()) {
+      setGitVer("Web 模式不可用");
+      return;
+    }
+    setCheckingGit(true);
+    try {
+      const v = await gitVersion();
+      if (v !== null && v.trim().length > 0) {
+        setGitVer(v.trim());
+      } else {
+        setGitVer("未检测到 Git（请确保已安装 Git 并配置到环境变量 PATH）");
+      }
+    } catch (err: unknown) {
+      setGitVer(`检测失败: ${messageOf(err)}`);
+    } finally {
+      setCheckingGit(false);
+    }
+  };
 
   // 云端动态配置面板
   const [cloudForm, setCloudForm] = createSignal(emptyForm());
@@ -179,7 +200,7 @@ export function Settings(): import("solid-js").JSX.Element {
 
   onMount(() => {
     if (isTauri()) {
-      void gitVersion().then((v) => setGitVer(v));
+      void checkGit();
       void refreshProjectPlugins();
     }
     if (apiStore.isAuthed()) {
@@ -642,9 +663,19 @@ export function Settings(): import("solid-js").JSX.Element {
                   <span class="font-mono truncate max-w-sm">{projectStore.projectDir() ?? "未选择"}</span>
                 </div>
 
-                <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)]">
-                  <span class="text-[var(--muted)]">Git 环境</span>
-                  <span class="font-mono">{gitVer() ?? "检测中..."}</span>
+                <div class="flex items-center justify-between p-2.5 bg-[var(--g-1)] rounded-[4px] border border-[var(--border)] gap-2">
+                  <span class="text-[var(--muted)] shrink-0">Git 环境</span>
+                  <div class="flex items-center gap-2 font-mono truncate">
+                    <span class="truncate">{gitVer()}</span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon="i-ri-refresh-line"
+                      loading={checkingGit()}
+                      onClick={() => void checkGit()}
+                      title="重新检测 Git 环境"
+                    />
+                  </div>
                 </div>
               </Show>
             </div>

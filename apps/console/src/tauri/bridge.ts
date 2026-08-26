@@ -102,11 +102,14 @@ export interface GitResult {
   code: number;
 }
 
-export async function gitExec(args: string[], cwd: string): Promise<GitResult> {
+export async function gitExec(args: string[], cwd?: string): Promise<GitResult> {
   if (!isTauri()) requireTauri();
   const { Command } = await import("@tauri-apps/plugin-shell");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- shell cwd typed as unknown in plugin
-  const cmd = Command.create("git", args, { cwd } as unknown as Record<string, unknown>);
+  const options =
+    cwd !== undefined && cwd.trim().length > 0
+      ? ({ cwd: cwd.trim() } as unknown as Record<string, unknown>)
+      : undefined;
+  const cmd = Command.create("git", args, options);
   const out = await cmd.execute();
   return { stdout: out.stdout, stderr: out.stderr, code: out.code ?? 0 };
 }
@@ -117,21 +120,24 @@ export async function gitExec(args: string[], cwd: string): Promise<GitResult> {
  */
 const SHELL_ALLOWLIST = new Set(["git", "pnpm", "npm", "bun"]);
 
-export async function runShell(program: string, args: string[], cwd: string): Promise<GitResult> {
+export async function runShell(program: string, args: string[], cwd?: string): Promise<GitResult> {
   if (!isTauri()) requireTauri();
   if (!SHELL_ALLOWLIST.has(program)) {
     return { stdout: "", stderr: `${program} 不在允许列表`, code: 1 };
   }
   const { Command } = await import("@tauri-apps/plugin-shell");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- shell cwd typed as unknown in plugin
-  const cmd = Command.create(program, args, { cwd } as unknown as Record<string, unknown>);
+  const options =
+    cwd !== undefined && cwd.trim().length > 0
+      ? ({ cwd: cwd.trim() } as unknown as Record<string, unknown>)
+      : undefined;
+  const cmd = Command.create(program, args, options);
   const out = await cmd.execute();
   return { stdout: out.stdout, stderr: out.stderr, code: out.code ?? 0 };
 }
 
 export async function shellVersion(program: string): Promise<string | null> {
   try {
-    const r = await runShell(program, ["--version"], "");
+    const r = await runShell(program, ["--version"]);
     if (r.code === 0) return (r.stdout || r.stderr).trim();
     return null;
   } catch {
@@ -141,8 +147,8 @@ export async function shellVersion(program: string): Promise<string | null> {
 
 export async function gitVersion(): Promise<string | null> {
   try {
-    const r = await gitExec(["--version"], "");
-    if (r.code === 0) return r.stdout.trim();
+    const r = await gitExec(["--version"]);
+    if (r.code === 0) return (r.stdout || r.stderr).trim();
     return null;
   } catch {
     return null;
