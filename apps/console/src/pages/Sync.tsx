@@ -63,7 +63,7 @@ export function Sync(): import("solid-js").JSX.Element {
     void apiStore
       .getClient()
       .health()
-      .then((h) => setPrimaryAvailable(h.primary.available))
+      .then((h) => setPrimaryAvailable(Boolean(h.primary?.available)))
       .catch(() => setPrimaryAvailable(false));
   });
 

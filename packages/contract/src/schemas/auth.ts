@@ -69,19 +69,28 @@ export const TokenRevokeResponseSchema = z.object({
 
 export type TokenRevokeResponse = z.infer<typeof TokenRevokeResponseSchema>;
 
-/** 健康检查：CLI 本地/远程判断用；primary.available = GitHub 桥配置齐（Primary 模式可用） */
+/** 健康检查：CLI 本地/远程判断用；mode: "gateway" | "replica" */
 export const HealthResponseSchema = z.object({
   ok: z.literal(true),
   version: z.string(),
   needsSetup: z.boolean(),
+  mode: z.enum(["gateway", "replica"]).default("gateway"),
   ai: z.object({
     summary: z.boolean(),
     embed: z.boolean(),
   }),
-  primary: z.object({
-    available: z.boolean(),
-    repo: z.string().nullable(),
-  }),
+  gateway: z
+    .object({
+      available: z.boolean(),
+    })
+    .optional(),
+  primary: z
+    .object({
+      available: z.boolean(),
+      repo: z.string().nullable().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;

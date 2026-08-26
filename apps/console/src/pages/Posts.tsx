@@ -133,15 +133,22 @@ export function Posts(): import("solid-js").JSX.Element {
   // 立刻生成摘要/嵌入
   const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
   const [genMsg, setGenMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
-
-  // Primary 可用性
+  // 模式与可写性（Gateway 模式支持完整读写；Replica 模式为只读副本）
+  const [serverMode, setServerMode] = createSignal<"gateway" | "replica">("gateway");
   const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
   onMount(() => {
     void apiStore
       .getClient()
       .health()
-      .then((h) => setPrimaryAvailable(h.primary.available))
-      .catch(() => setPrimaryAvailable(false));
+      .then((h) => {
+        const isReplica = h.mode === "replica" || h.primary?.available === false;
+        setServerMode(isReplica ? "replica" : "gateway");
+        setPrimaryAvailable(!isReplica);
+      })
+      .catch(() => {
+        setServerMode("gateway");
+        setPrimaryAvailable(true);
+      });
   });
 
   const handleGenerateAi = async (post: { path: string; title: string }): Promise<void> => {
@@ -201,8 +208,8 @@ export function Posts(): import("solid-js").JSX.Element {
     setEditError(null);
     try {
       const res = await apiStore.getClient().upsertPost({ path, content: editContent() });
-      const msg = `${res.changed ? "正文已更新" : "无正文变化"}${res.dispatched ? "，已触发 Git 导出" : "（未配置 GitHub 桥）"}`;
-      toast.success(msg, "远程编辑保存成功");
+      const msg = res.changed ? "正文已更新至 D1 数据库" : "正文无变化";
+      toast.success(msg, "保存成功");
       setEditingPath(null);
       await refetch();
     } catch (err: unknown) {
@@ -529,7 +536,7 @@ export function Posts(): import("solid-js").JSX.Element {
                               icon={primaryAvailable() ? "i-ri-edit-line" : "i-ri-eye-line"}
                               title={
                                 primaryAvailable()
-                                  ? "在云端直接修改并触发 Git 导出"
+                                  ? "在线编辑正文"
                                   : t("posts.replicaReadOnlyTooltip")
                               }
                             >
@@ -562,13 +569,13 @@ export function Posts(): import("solid-js").JSX.Element {
         onClose={() => setEditingPath(null)}
         title={
           primaryAvailable()
-            ? `远程编辑：${editingPath() ?? ""}`
+            ? `编辑文章：${editingPath() ?? ""}`
             : `${t("posts.viewTitle")}：${editingPath() ?? ""}`
         }
         description={
           primaryAvailable()
-            ? "修改将直接写入 D1 数据库并同步触发 GitHub 导出任务"
-            : "当前为 Replica 模式（只读副本），正文仅供查看与复制，无法在云端直接保存"
+            ? "修改将直接保存至 Cloudflare D1 边缘数据库"
+            : "当前为 Replica 模式（本地事实源），正文仅供查看与预览，请在本地修改后同步"
         }
         size="full"
         footer={

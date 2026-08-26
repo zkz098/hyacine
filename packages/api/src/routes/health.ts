@@ -26,7 +26,11 @@ export function healthRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       ok: true as const,
       version: "0.1.0",
       needsSetup,
+      mode: "gateway" as const,
       ai: { summary: hasSummary, embed: hasEmbed },
+      gateway: {
+        available: true,
+      },
       primary: {
         available: primaryAvailable,
         repo: primaryAvailable ? `${cfg.github.repoOwner}/${cfg.github.repoName}` : null,
