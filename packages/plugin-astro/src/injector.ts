@@ -3,39 +3,147 @@ import { pascalCase } from "es-toolkit";
 import MagicString from "magic-string";
 import type { InjectPointDetail } from "@hyacine/contract";
 
-function walkDeep(node: any, callback: (node: any) => void): void {
-  callback(node);
+function walkDeep(
+  node: any,
+  callback: (node: any, ancestors: any[]) => void,
+  ancestors: any[] = [],
+): void {
+  callback(node, ancestors);
   if (node.children && Array.isArray(node.children)) {
+    const nextAncestors = [...ancestors, node];
     for (const child of node.children) {
-      walkDeep(child, callback);
+      walkDeep(child, callback, nextAncestors);
     }
   }
 }
 
-/**
- * 检查 AST 节点是否匹配简易 CSS 选择器（支持 tag, .class, #id）
- */
-export function matchesSelector(node: any, selector: string): boolean {
-  if (node.type !== "element") return false;
+export function parseSelectorPart(part: string): {
+  tag?: string;
+  id?: string;
+  classes: string[];
+} {
+  let tag: string | undefined;
+  let id: string | undefined;
+  const classes: string[] = [];
 
-  const sel = selector.trim();
-  if (sel.startsWith("#")) {
-    const id = sel.slice(1);
-    const idAttr = node.attributes?.find((a: any) => a.name === "id");
-    return idAttr && idAttr.value === id;
+  const tokens = part.match(/([.#]?[a-zA-Z0-9_-]+)/g) || [];
+
+  for (const token of tokens) {
+    if (token.startsWith("#")) {
+      id = token.slice(1);
+    } else if (token.startsWith(".")) {
+      classes.push(token.slice(1));
+    } else if (!tag && !token.startsWith(".") && !token.startsWith("#")) {
+      tag = token;
+    }
   }
 
-  if (sel.startsWith(".")) {
-    const className = sel.slice(1);
-    const classAttr = node.attributes?.find((a: any) => a.name === "class");
-    if (classAttr && typeof classAttr.value === "string") {
-      const classes = classAttr.value.split(/\s+/);
-      return classes.includes(className);
-    }
+  return { tag, id, classes };
+}
+
+export function matchesSingleElement(node: any, selectorPart: string): boolean {
+  if (!node || node.type !== "element") return false;
+
+  const { tag, id, classes } = parseSelectorPart(selectorPart.trim());
+
+  if (tag && node.name?.toLowerCase() !== tag.toLowerCase()) {
     return false;
   }
 
-  return node.name === sel;
+  if (id) {
+    const idAttr = node.attributes?.find((a: any) => a.name === "id");
+    if (!idAttr || idAttr.value !== id) {
+      return false;
+    }
+  }
+
+  if (classes.length > 0) {
+    const classAttr = node.attributes?.find((a: any) => a.name === "class");
+    if (!classAttr || typeof classAttr.value !== "string") {
+      return false;
+    }
+    const nodeClasses = classAttr.value.split(/\s+/).filter(Boolean);
+    const hasAllClasses = classes.every((c) => nodeClasses.includes(c));
+    if (!hasAllClasses) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 检查 AST 节点是否匹配 CSS 选择器（支持 tag, .class, #id, tag.class, 以及后代选择器 a b）
+ */
+export function matchesSelector(node: any, selector: string, ancestors: any[] = []): boolean {
+  if (!node || node.type !== "element") return false;
+
+  const parts = selector.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return false;
+
+  const targetPart = parts[parts.length - 1];
+  if (!matchesSingleElement(node, targetPart)) {
+    return false;
+  }
+
+  if (parts.length === 1) {
+    return true;
+  }
+
+  let partIndex = parts.length - 2;
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const ancestor = ancestors[i];
+    if (matchesSingleElement(ancestor, parts[partIndex])) {
+      partIndex--;
+      if (partIndex < 0) break;
+    }
+  }
+
+  return partIndex < 0;
+}
+
+export function getOffsetFromLineCol(code: string, line: number, column: number): number {
+  let currentLine = 1;
+  let currentOffset = 0;
+  while (currentLine < line && currentOffset < code.length) {
+    const nextNewline = code.indexOf("\n", currentOffset);
+    if (nextNewline === -1) break;
+    currentOffset = nextNewline + 1;
+    currentLine++;
+  }
+  return Math.min(code.length, currentOffset + (column - 1));
+}
+
+export function getNodeOffsets(
+  code: string,
+  node: any,
+): { start: number; end: number } | null {
+  if (!node?.position?.start || !node?.position?.end) return null;
+
+  const startLine = node.position.start.line;
+  const startCol = node.position.start.column;
+  const endLine = node.position.end.line;
+  const endCol = node.position.end.column;
+
+  if (
+    typeof startLine === "number" &&
+    typeof startCol === "number" &&
+    typeof endLine === "number" &&
+    typeof endCol === "number"
+  ) {
+    const start = getOffsetFromLineCol(code, startLine, startCol);
+    const end = getOffsetFromLineCol(code, endLine, endCol);
+    return { start, end };
+  }
+
+  if (
+    typeof node.position.start.offset === "number" &&
+    typeof node.position.end.offset === "number"
+  ) {
+    return { start: node.position.start.offset, end: node.position.end.offset };
+  }
+
+  return null;
 }
 
 export interface AstInjectOptions {
@@ -79,49 +187,44 @@ export async function injectAstroAST(
     let hasModifications = false;
 
     // 2. 遍历 AST 寻找选择器匹配节点
-    walkDeep(ast, (node) => {
+    walkDeep(ast, (node, ancestors) => {
       if (node.type !== "element") return;
 
       for (const [slotName, detail] of activeEntries) {
         // 如果当前模板已经显式声明了该 Slot 的 Outlet，则跳过 AST 注入
         if (existingOutlets.has(slotName)) continue;
 
-        if (matchesSelector(node, detail.selector)) {
+        if (matchesSelector(node, detail.selector, ancestors)) {
           const compName = `HyacineSlot_${pascalCase(slotName)}`;
           slotsToImport.add(slotName);
 
           const injectTag = `\n<${compName} context={Astro.props?.entry ?? Astro.props?.post ?? Astro.props} />\n`;
           const pos = detail.position ?? "append";
+          const offsets = getNodeOffsets(code, node);
 
-          if (node.position) {
-            if (pos === "before" && node.position.start) {
-              s.appendLeft(node.position.start.offset, injectTag);
+          if (offsets) {
+            if (pos === "before") {
+              s.appendLeft(offsets.start, injectTag);
               hasModifications = true;
-            } else if (pos === "after" && node.position.end) {
-              s.appendRight(node.position.end.offset, injectTag);
+            } else if (pos === "after") {
+              s.appendRight(offsets.end, injectTag);
               hasModifications = true;
             } else if (pos === "prepend") {
               // 插入到首个子节点前，或开标签后
-              const startOffset = node.position.start?.offset ?? 0;
-              // 寻找首个 '>' 结束开标签
-              const closingAngleIndex = code.indexOf(">", startOffset);
+              const closingAngleIndex = code.indexOf(">", offsets.start);
               if (closingAngleIndex !== -1) {
                 s.appendRight(closingAngleIndex + 1, injectTag);
                 hasModifications = true;
               }
             } else {
               // 默认 append：插入到闭标签前
-              if (node.position.end) {
-                // 查找最后的 '</'
-                const endOffset = node.position.end.offset;
-                const lastClosing = code.lastIndexOf("</", endOffset);
-                if (lastClosing !== -1 && lastClosing >= (node.position.start?.offset ?? 0)) {
-                  s.appendLeft(lastClosing, injectTag);
-                } else {
-                  s.appendRight(endOffset, injectTag);
-                }
-                hasModifications = true;
+              const lastClosing = code.lastIndexOf("</", offsets.end);
+              if (lastClosing !== -1 && lastClosing >= offsets.start) {
+                s.appendLeft(lastClosing, injectTag);
+              } else {
+                s.appendRight(offsets.end, injectTag);
               }
+              hasModifications = true;
             }
           }
         }
@@ -145,8 +248,10 @@ export async function injectAstroAST(
     if (firstDash !== -1) {
       const secondDash = code.indexOf("---", firstDash + 3);
       if (secondDash !== -1) {
-        // 在现有的 Frontmatter 顶部注入
-        s.appendRight(firstDash + 3, `\n${importStatements}\n`);
+        // 在现有的 Frontmatter 顶部注入（找到首行 --- 后的换行符处安全插入）
+        const lineEnd = code.indexOf("\n", firstDash);
+        const insertPos = lineEnd !== -1 && lineEnd < secondDash ? lineEnd + 1 : firstDash + 3;
+        s.appendLeft(insertPos, `${importStatements}\n`);
       } else {
         // 新建 Frontmatter
         s.prepend(`---\n${importStatements}\n---\n`);

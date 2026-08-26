@@ -1,5 +1,9 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
 import type { HyacinePluginSystemConfig } from "@hyacine/plugin-core";
+import { createJiti } from "jiti";
 import { createHyacineVitePlugin } from "./vite-plugin";
 
 export interface HyacinePluginIntegrationOptions {
@@ -13,16 +17,35 @@ export function hyacinePlugin(options: HyacinePluginIntegrationOptions = {}): As
   return {
     name: "@hyacine/plugin-astro",
     hooks: {
-      "astro:config:setup": async ({ config, updateConfig, logger }) => {
+      "astro:config:setup": async ({ config, updateConfig, injectScript, logger }) => {
         let pluginConfig = options.config;
 
         if (!pluginConfig) {
-          try {
-            const configUrl = new URL("./hyacine.plugin.ts", config.root);
-            const mod = await import(configUrl.href);
-            pluginConfig = mod.default;
-            logger.info(`[hyacine] Loaded configuration from ${configUrl.pathname}`);
-          } catch {
+          const rootDir = config.root ? fileURLToPath(config.root) : process.cwd();
+          const configPath = join(rootDir, "hyacine.plugin.ts");
+
+          if (existsSync(configPath)) {
+            try {
+              const jiti = createJiti(rootDir, { interopDefault: true });
+              const mod = (await jiti.import(configPath)) as
+                | { default?: HyacinePluginSystemConfig }
+                | HyacinePluginSystemConfig;
+              pluginConfig =
+                mod && typeof mod === "object" && "default" in mod && mod.default
+                  ? mod.default
+                  : (mod as HyacinePluginSystemConfig);
+              logger.info(`[hyacine] Loaded configuration from ${configPath}`);
+            } catch (err) {
+              logger.error(
+                `[hyacine] Failed to load configuration from ${configPath}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
+              );
+              pluginConfig = {
+                injectPoints: {},
+                plugins: [],
+                postCollection: "posts",
+              };
+            }
+          } else {
             pluginConfig = {
               injectPoints: {},
               plugins: [],
@@ -36,6 +59,9 @@ export function hyacinePlugin(options: HyacinePluginIntegrationOptions = {}): As
           plugins: [],
           postCollection: "posts",
         };
+
+        // 自动注入客户端 Runtime 初始化脚本
+        injectScript("page", 'import "virtual:hyacine/runtime";');
 
         updateConfig({
           vite: {

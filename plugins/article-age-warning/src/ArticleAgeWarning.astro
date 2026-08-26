@@ -17,9 +17,11 @@ const publishDateValue =
     : undefined;
 
 const publishDate =
-  typeof publishDateValue === "string" || typeof publishDateValue === "number"
-    ? new Date(publishDateValue)
-    : null;
+  publishDateValue instanceof Date
+    ? publishDateValue
+    : typeof publishDateValue === "string" || typeof publishDateValue === "number"
+      ? new Date(publishDateValue)
+      : null;
 
 const isValidPublishDate = publishDate !== null && !Number.isNaN(publishDate.getTime());
 const ageInDays = isValidPublishDate

@@ -12,6 +12,21 @@ describe("plugin-astro generator", () => {
     expect(code).toContain("empty-slot (empty)");
   });
 
+  it("当仅有 runtime-only entries 时，依然生成包裹 DOM 容器", () => {
+    const code = generateSlotAstroComponent("footer-status", [
+      {
+        name: "site-uptime-runtime",
+        type: "runtime-only",
+        path: "./runtime.ts",
+        injectPoint: "footer-status",
+        options: {},
+      },
+    ]);
+    expect(code).toContain('class="hyacine-slot hyacine-slot-footer-status"');
+    expect(code).toContain('data-hyacine-slot="footer-status"');
+    expect(code).toContain("<slot />");
+  });
+
   it("生成带水合指令的 SSR 插槽组件", () => {
     const code = generateSlotAstroComponent("post-footer", [
       {
@@ -58,6 +73,34 @@ describe("plugin-astro AST injector", () => {
     expect(matchesSelector(elementNode, ".not-found")).toBe(false);
   });
 
+  it("matchesSelector 正确匹配复合选择器与后代选择器", () => {
+    const rootNode = {
+      type: "element",
+      name: "footer",
+      attributes: [{ name: "id", value: "footer" }],
+    };
+    const childNode = {
+      type: "element",
+      name: "div",
+      attributes: [{ name: "class", value: "status text-center" }],
+    };
+    expect(matchesSelector(childNode, "#footer .status", [rootNode])).toBe(true);
+    expect(matchesSelector(childNode, "article.post .status", [rootNode])).toBe(false);
+
+    const articleNode = {
+      type: "element",
+      name: "article",
+      attributes: [{ name: "class", value: "post block" }],
+    };
+    const headerNode = {
+      type: "element",
+      name: "header",
+      attributes: [],
+    };
+    expect(matchesSelector(articleNode, "article.post")).toBe(true);
+    expect(matchesSelector(headerNode, "article.post header", [articleNode])).toBe(true);
+  });
+
   it("在已有 <HyacineOutlet> 时跳过 AST 注入，避免双重渲染", async () => {
     const templateWithOutlet = `---
 import HyacineOutlet from "./HyacineOutlet.astro";
@@ -76,23 +119,33 @@ import HyacineOutlet from "./HyacineOutlet.astro";
     expect(result).toBeNull();
   });
 
-  it("无 Outlet 时自动通过 AST 注入虚拟插槽组件", async () => {
+  it("无 Outlet 时自动通过 AST 注入虚拟插槽组件（支持后代选择器）", async () => {
     const template = `---
 const title = "My Post";
 ---
-<div class="article-body">
-  <p>Article body content</p>
-</div>
+<article class="post block">
+  <header>
+    <h1>Title</h1>
+  </header>
+  <div class="body md">
+    <p>Article body content</p>
+  </div>
+</article>
 `;
     const result = await injectAstroAST(template, "/src/pages/post.astro", {
       injectPoints: {
-        "post-footer": { selector: ".article-body", position: "after", order: 0 },
+        "post-header": { selector: "article.post header", position: "after", order: 0 },
+        "post-footer": { selector: "article.post .body", position: "after", order: 0 },
       },
     });
     expect(result).not.toBeNull();
     expect(result!.code).toContain(
+      'import HyacineSlot_PostHeader from "virtual:hyacine/slots/post-header.astro"',
+    );
+    expect(result!.code).toContain(
       'import HyacineSlot_PostFooter from "virtual:hyacine/slots/post-footer.astro"',
     );
+    expect(result!.code).toContain("<HyacineSlot_PostHeader");
     expect(result!.code).toContain("<HyacineSlot_PostFooter");
   });
 });

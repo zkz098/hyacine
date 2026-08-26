@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Plugin as VitePlugin } from "vite";
 import {
   type HyacinePluginSystemConfig,
@@ -18,7 +19,6 @@ export const VIRTUAL_SLOTS_MANIFEST_ID = "virtual:hyacine/slots-manifest";
 export const RESOLVED_SLOTS_MANIFEST_ID = "\0virtual:hyacine/slots-manifest";
 
 const VIRTUAL_SLOT_PREFIX = "virtual:hyacine/slots/";
-const RESOLVED_SLOT_PREFIX = "\0virtual:hyacine/slots/";
 
 export interface HyacineVitePluginOptions {
   config: HyacinePluginSystemConfig;
@@ -61,12 +61,13 @@ export function createHyacineVitePlugin(options: HyacineVitePluginOptions): Vite
         return RESOLVED_SLOTS_MANIFEST_ID;
       }
       if (id.startsWith(VIRTUAL_SLOT_PREFIX)) {
-        return `${RESOLVED_SLOT_PREFIX}${id.slice(VIRTUAL_SLOT_PREFIX.length)}`;
+        // 虚拟 .astro 组件不能添加 \0 前缀，否则会被 @astrojs/vite-plugin-astro 忽略而无法编译为 Astro 组件
+        return id;
       }
       return null;
     },
 
-    load(id: string) {
+    async load(id: string) {
       if (id === RESOLVED_RUNTIME_ID) {
         const runtimes = collectRuntimeEntries(manifests);
         return generateRuntimeModuleCode(runtimes);
@@ -96,8 +97,8 @@ export default slots;
 `;
       }
 
-      if (id.startsWith(RESOLVED_SLOT_PREFIX)) {
-        let slotName = id.slice(RESOLVED_SLOT_PREFIX.length);
+      if (id.startsWith(VIRTUAL_SLOT_PREFIX)) {
+        let slotName = id.slice(VIRTUAL_SLOT_PREFIX.length);
         if (slotName.endsWith(".astro")) {
           slotName = slotName.slice(0, -".astro".length);
         }
@@ -105,19 +106,28 @@ export default slots;
         return generateSlotAstroComponent(slotName, entries);
       }
 
-      return null;
-    },
-
-    async transform(code: string, id: string) {
-      if (!enableAstInjection) return null;
-      // 仅对用户工程源码中的 .astro 文件执行 AST 智能注入（跳过 node_modules 和虚拟模块）
-      if (!id.endsWith(".astro") || id.includes("node_modules") || id.startsWith("\0")) {
-        return null;
+      // AST 智能注入：在 load 阶段拦截用户工程中的 .astro 源码，确保在 Astro 编译器 transform 之前完成模板注入
+      if (
+        enableAstInjection &&
+        id.endsWith(".astro") &&
+        !id.includes("node_modules") &&
+        !id.startsWith("\0") &&
+        !id.startsWith(VIRTUAL_SLOT_PREFIX)
+      ) {
+        try {
+          const rawCode = readFileSync(id, "utf8");
+          const injected = await injectAstroAST(rawCode, id, {
+            injectPoints: normalizedInjectPoints,
+          });
+          if (injected) {
+            return injected.code;
+          }
+        } catch {
+          // fall through to default loader
+        }
       }
 
-      return await injectAstroAST(code, id, {
-        injectPoints: normalizedInjectPoints,
-      });
+      return null;
     },
   };
 }

@@ -10,7 +10,7 @@ export function init(options: SiteUptimeRuntimeOptions): void {
   const {
     siteCreatedAt,
     prefixText = "本站已持续运行",
-    targetSelector = ".hyacine-slot-footer-status, .footer-status",
+    targetSelector = ".hyacine-slot-footer-status, .footer-status, #footer .status",
   } = options;
 
   const startDate = new Date(siteCreatedAt).getTime();
