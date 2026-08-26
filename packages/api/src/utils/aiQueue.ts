@@ -140,6 +140,131 @@ export function chunkText(text: string, maxChars = 800): string[] {
 
 // ---- 摘要生成（provider 分流） ---------------------------------------------
 
+/**
+ * 递归从任何 AI 响应结构中提取纯文本。
+ * 覆盖：
+ * - OpenAI / Workers AI Chat Completions `{ choices: [{ message: { content } }] }`、`{ choices: [{ text }] }`、`{ choices: [{ delta: { content } }] }`
+ * - 纯文本模型 `{ response }`、`{ text }`、`{ content }`、`{ summary }`
+ * - Responses API `{ output_text }`、`{ outputText }`
+ * - Gemini 格式 `{ candidates: [{ content: { parts: [{ text }] } }] }`
+ * - 推理模型（DeepSeek-R1 / Qwen 等）`{ reasoning_content }` / `{ reasoning }`
+ * - 多模态分段数组 `[{ type: "text", text: "..." }]`
+ * - REST API 包装 `{ result: { ... } }`
+ */
+export function collectTextFromAny(v: unknown, depth = 0): string[] {
+  if (depth > 6 || v === null || v === undefined) return [];
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return [];
+  }
+  if (Array.isArray(v)) {
+    const out: string[] = [];
+    for (const item of v) {
+      out.push(...collectTextFromAny(item, depth + 1));
+    }
+    return out;
+  }
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    const out: string[] = [];
+
+    // 优先提取最明确的内容字段
+    if ("content" in obj && obj.content !== null && obj.content !== undefined) {
+      out.push(...collectTextFromAny(obj.content, depth + 1));
+    }
+    if ("text" in obj && obj.text !== null && obj.text !== undefined) {
+      out.push(...collectTextFromAny(obj.text, depth + 1));
+    }
+    if ("response" in obj && obj.response !== null && obj.response !== undefined) {
+      out.push(...collectTextFromAny(obj.response, depth + 1));
+    }
+    if ("output_text" in obj && obj.output_text !== null && obj.output_text !== undefined) {
+      out.push(...collectTextFromAny(obj.output_text, depth + 1));
+    }
+    if ("outputText" in obj && obj.outputText !== null && obj.outputText !== undefined) {
+      out.push(...collectTextFromAny(obj.outputText, depth + 1));
+    }
+    if ("summary" in obj && obj.summary !== null && obj.summary !== undefined) {
+      out.push(...collectTextFromAny(obj.summary, depth + 1));
+    }
+    if ("message" in obj && obj.message !== null && obj.message !== undefined) {
+      out.push(...collectTextFromAny(obj.message, depth + 1));
+    }
+    if ("delta" in obj && obj.delta !== null && obj.delta !== undefined) {
+      out.push(...collectTextFromAny(obj.delta, depth + 1));
+    }
+    if ("parts" in obj && obj.parts !== null && obj.parts !== undefined) {
+      out.push(...collectTextFromAny(obj.parts, depth + 1));
+    }
+    if ("value" in obj && obj.value !== null && obj.value !== undefined) {
+      out.push(...collectTextFromAny(obj.value, depth + 1));
+    }
+
+    // 处理 choices / candidates / result 容器
+    if ("choices" in obj && obj.choices !== null && obj.choices !== undefined) {
+      out.push(...collectTextFromAny(obj.choices, depth + 1));
+    }
+    if ("candidates" in obj && obj.candidates !== null && obj.candidates !== undefined) {
+      out.push(...collectTextFromAny(obj.candidates, depth + 1));
+    }
+    if ("result" in obj && obj.result !== null && obj.result !== undefined) {
+      out.push(...collectTextFromAny(obj.result, depth + 1));
+    }
+
+    // 如果未提取到正文，回退尝试 reasoning_content/reasoning（如推理模型）
+    if (out.length === 0) {
+      if (
+        "reasoning_content" in obj &&
+        obj.reasoning_content !== null &&
+        obj.reasoning_content !== undefined
+      ) {
+        out.push(...collectTextFromAny(obj.reasoning_content, depth + 1));
+      }
+      if ("reasoning" in obj && obj.reasoning !== null && obj.reasoning !== undefined) {
+        out.push(...collectTextFromAny(obj.reasoning, depth + 1));
+      }
+    }
+
+    return out;
+  }
+  return [];
+}
+
+/**
+ * 从 Workers AI / AI Gateway 绑定或 BYOK 返回里提取纯文本。
+ * 兼容 OpenAI / Workers AI Chat Completions、文本生成模型 `{ response }`、Responses API `{ output_text }`、
+ * 以及各种结构体（choices, candidates, text, content, parts, reasoning 等）。
+ * 若返回 payload 本身是错误对象（{error}/{errors}）则抛出带详情的错误而非“空摘要”。
+ */
+export function extractWorkersAiText(result: unknown): string {
+  if (result === null || typeof result !== "object") return "";
+  const obj = result as Record<string, unknown>;
+
+  // 错误 payload：绑定失败时常以 {error} / {errors:[{message}]} 返回而非抛错
+  const errMsg =
+    (obj.error &&
+      (typeof obj.error === "string"
+        ? obj.error
+        : (obj.error as { message?: unknown })?.message)) ||
+    (Array.isArray(obj.errors) &&
+      obj.errors.length > 0 &&
+      (obj.errors[0] as { message?: unknown })?.message);
+  if (typeof errMsg === "string" && errMsg.length > 0) {
+    throw new Error(`Workers AI 调用失败: ${errMsg}`);
+  }
+
+  const parts = collectTextFromAny(result);
+
+  return parts
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .join(" ")
+    .replace(/\s+/g, " ");
+}
+
 export async function generateSummaryByok(
   endpoint: string,
   key: string,
@@ -166,81 +291,12 @@ export async function generateSummaryByok(
     const text = await response.text();
     throw new Error(`AI 调用失败: ${response.status} ${text.slice(0, 500)}`);
   }
-  const json = (await response.json()) as {
-    choices?: { message?: { content?: string | { text?: string }[] } }[];
-    error?: { message?: string };
-  };
-  if (json.error !== undefined) throw new Error(json.error.message ?? "AI 返回错误");
-  const choice = json.choices?.[0]?.message?.content;
-  if (typeof choice === "string") return choice.trim().replace(/\s+/g, " ");
-  if (Array.isArray(choice)) {
-    const textPart = choice.find((item) => typeof item.text === "string");
-    return (textPart?.text ?? "").trim().replace(/\s+/g, " ");
+  const json: unknown = await response.json();
+  const summary = extractWorkersAiText(json);
+  if (summary.length === 0) {
+    throw new Error("AI 返回空摘要");
   }
-  throw new Error("AI 返回空摘要");
-}
-
-/**
- * 从 Workers AI / AI Gateway 绑定返回里提取纯文本。
- * 兼容文本生成模型 `{ response }`、Responses API `{ output_text }`、
- * OpenAI 兼容 `{ choices[].message.content }`，以及多模态部分数组（string 或 [{text}]）。
- * 若返回 payload 本身是错误对象（{error}/{errors}）则抛出带详情的错误而非“空摘要”。
- */
-export function extractWorkersAiText(result: unknown): string {
-  if (result === null || typeof result !== "object") return "";
-  let obj = result as Record<string, unknown>;
-
-  // 错误 payload：绑定失败时常以 {error} / {errors:[{message}]} 返回而非抛错
-  const errMsg = (
-    obj.error &&
-    (typeof obj.error === "string"
-      ? obj.error
-      : (obj.error as { message?: unknown })?.message)
-  ) ||
-    (Array.isArray(obj.errors) &&
-      obj.errors.length > 0 &&
-      (obj.errors[0] as { message?: unknown })?.message);
-  if (typeof errMsg === "string" && errMsg.length > 0) {
-    throw new Error(`Workers AI 调用失败: ${errMsg}`);
-  }
-
-  // REST /ai/run 信封 `{ success, errors, result: {...} }`：绑定已 unwrap，但若路由经 REST
-  // 返回，真正的模型输出藏在 `result` 下，需要解包一层再提取。
-  const wrapped = obj.result;
-  if (wrapped !== null && typeof wrapped === "object" && !Array.isArray(wrapped)) {
-    const w = wrapped as Record<string, unknown>;
-    if ("response" in w || "output_text" in w || "outputText" in w || "choices" in w) {
-      obj = w;
-    }
-  }
-
-  const collectText = (v: unknown): string[] => {
-    const out: string[] = [];
-    if (typeof v === "string") out.push(v);
-    else if (Array.isArray(v)) {
-      for (const item of v) {
-        if (typeof item === "string") out.push(item);
-        else if (item !== null && typeof item === "object") {
-          const t = (item as { text?: unknown }).text;
-          if (typeof t === "string") out.push(t);
-        }
-      }
-    }
-    return out;
-  };
-
-  const parts: string[] = [];
-  parts.push(...collectText(obj.response));
-  parts.push(...collectText(obj.output_text));
-  parts.push(...collectText(obj.outputText));
-  const choice = (obj.choices as { message?: { content?: unknown } }[] | undefined)?.[0];
-  if (choice?.message !== undefined) parts.push(...collectText(choice.message.content));
-
-  return parts
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0)
-    .join(" ")
-    .replace(/\s+/g, " ");
+  return summary;
 }
 
 export async function generateSummaryWorkersAi(

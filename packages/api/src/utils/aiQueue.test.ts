@@ -110,6 +110,48 @@ describe("extractWorkersAiText", () => {
       }),
     ).toBe("信封choices");
   });
+  it("Workers AI 完整元数据信封（含 id, choices, usage, kv_transfer_params 等）→ 正常提取", () => {
+    const payload = {
+      id: "cmpl-01953284-07d0-7a0e-9134-d02fa74efc24",
+      object: "chat.completion",
+      created: 1740530000,
+      model: "@cf/meta/llama-3.2-3b-instruct",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: "这是一篇记录美好一天的随笔文章。",
+          },
+          finish_reason: "stop",
+        },
+      ],
+      service_tier: "default",
+      system_fingerprint: "fp_workers_ai",
+      usage: { prompt_tokens: 120, completion_tokens: 25, total_tokens: 145 },
+      prompt_logprobs: null,
+      prompt_token_ids: [1, 2, 3],
+      kv_transfer_params: {},
+    };
+    expect(extractWorkersAiText(payload)).toBe("这是一篇记录美好一天的随笔文章。");
+  });
+  it("纯文本补全模型 {choices: [{text}]} → 提取", () => {
+    expect(extractWorkersAiText({ choices: [{ text: "补全摘要内容" }] })).toBe("补全摘要内容");
+  });
+  it("推理模型（DeepSeek-R1 / Qwen 等）无 content 仅 reasoning_content → 回退提取", () => {
+    expect(
+      extractWorkersAiText({
+        choices: [{ message: { role: "assistant", content: null, reasoning_content: "思考得出的摘要内容" } }],
+      }),
+    ).toBe("思考得出的摘要内容");
+  });
+  it("Gemini 格式 {candidates: [{content: {parts: [{text}]}}]} → 提取", () => {
+    expect(
+      extractWorkersAiText({
+        candidates: [{ content: { parts: [{ text: "Gemini 摘要" }] } }],
+      }),
+    ).toBe("Gemini 摘要");
+  });
   it("无任何已知字段 → 返回空串（由调用方报空摘要）", () => {
     expect(extractWorkersAiText({ foo: "bar" })).toBe("");
     expect(extractWorkersAiText({ success: true, result: null })).toBe("");
