@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyacine 插件系统核心：Manifest 契约、配置标准化与插件注册表",
   "files": [
     "dist",
@@ -17,7 +17,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
+    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean",
     "typecheck": "oxlint -A all --type-aware --type-check .",
     "typecheck:tsc": "tsc --noEmit",
     "test": "vitest run"

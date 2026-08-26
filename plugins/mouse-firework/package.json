@@ -1,10 +1,17 @@
 {
   "name": "@hyacine/plugin-mouse-firework",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyacine 官方插件：鼠标点击烟花特效",
+  "files": [
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",

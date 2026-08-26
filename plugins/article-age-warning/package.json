@@ -1,11 +1,18 @@
 {
   "name": "@hyacine/plugin-article-age-warning",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyacine 官方插件：文章发布较早/内容过时提示（SSR 零客户端 JS）",
+  "files": [
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./ArticleAgeWarning.astro": "./src/ArticleAgeWarning.astro"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",

@@ -1,10 +1,17 @@
 {
   "name": "@hyacine/plugin-vercount",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyacine 官方插件：页面/站点访问量与阅读量统计",
+  "files": [
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",

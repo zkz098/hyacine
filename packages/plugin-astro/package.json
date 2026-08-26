@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-astro",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hyacine Astro 插件集成：双模注入（声明式 <HyacineOutlet> + 零侵入 AST 注入）与 Vite 虚拟模块分发",
   "files": [
     "dist",
@@ -19,7 +19,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean --unbundle",
+    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean",
     "typecheck": "oxlint -A all --type-aware --type-check .",
     "typecheck:tsc": "tsc --noEmit",
     "test": "vitest run"
