@@ -76,7 +76,7 @@ describe("Posts page", () => {
     expect(await findByText("暂无文章，请先通过 CLI 同步")).toBeInTheDocument();
   });
 
-  it("allows opening post in read-only mode in Replica mode", async () => {
+  it("allows opening post in read-only mode in Local mode", async () => {
     const fetchMock = vi.fn((url: string) => {
       if (String(url).includes("/api/health")) {
         return Promise.resolve(
@@ -85,10 +85,11 @@ describe("Posts page", () => {
               ok: true,
               version: "0.1.0",
               needsSetup: false,
-              mode: "replica",
+              mode: "local",
               ai: { summary: true, embed: true },
               r2: true,
               github: false,
+              cloud: { available: false },
               gateway: { available: false },
               primary: { available: false, repo: null },
             }),
@@ -114,7 +115,7 @@ describe("Posts page", () => {
     expect(readOnlyBtn).toBeInTheDocument();
     fireEvent.click(readOnlyBtn);
 
-    expect(await screen.findByText("只读模式 (Replica)")).toBeInTheDocument();
+    expect(await screen.findByText("只读模式 (Local)")).toBeInTheDocument();
     expect(await screen.findByText("文章正文 (只读)：a.md")).toBeInTheDocument();
     expect(screen.getByText("只读模式（禁止保存）")).toBeInTheDocument();
   });

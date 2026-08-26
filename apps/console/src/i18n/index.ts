@@ -38,10 +38,10 @@ const zhCN: Record<string, string> = {
   "posts.editRemote": "编辑文章",
   "posts.viewReadOnly": "查看 (只读)",
   "posts.viewTitle": "文章正文 (只读)",
-  "posts.editDisabled": "Replica 模式不可用：本地文件为唯一事实源",
-  "posts.replicaReadOnlyTooltip": "Replica 模式：正文仅供只读查看，请在本地修改后同步",
+  "posts.editDisabled": "Local 模式不可用：本地文件为唯一事实源",
+  "posts.replicaReadOnlyTooltip": "Local 模式：正文仅供只读查看，请在本地修改后同步",
   "posts.replicaReadOnlyNotice":
-    "当前为 Replica 模式（本地文件为唯一事实源）。云端作为只读副本与 AI 加速网关展示，禁止在网页端直接保存。如需修改文章，请在本地编辑后运行 `hyc sync` 同步至云端。",
+    "当前为 Local 模式（本地文件为唯一事实源）。云端作为只读副本与 AI 加速网关展示，禁止在网页端直接保存。如需修改文章，请在本地编辑后运行 `hyc sync` 同步至云端。",
   "posts.editSave": "保存修改",
   "posts.editing": "保存中...",
   "posts.ai.generate": "生成 AI",

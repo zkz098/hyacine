@@ -26,8 +26,11 @@ export function healthRoutes(app: Hono<{ Bindings: Env; Variables: Variables }>)
       ok: true as const,
       version: "0.1.0",
       needsSetup,
-      mode: "gateway" as const,
+      mode: "cloud" as const,
       ai: { summary: hasSummary, embed: hasEmbed },
+      cloud: {
+        available: true,
+      },
       gateway: {
         available: true,
       },

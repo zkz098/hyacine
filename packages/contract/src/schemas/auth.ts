@@ -69,12 +69,12 @@ export const TokenRevokeResponseSchema = z.object({
 
 export type TokenRevokeResponse = z.infer<typeof TokenRevokeResponseSchema>;
 
-/** 健康检查：CLI 本地/远程判断用；mode: "gateway" | "replica" */
+/** 健康检查：CLI 本地/远程判断用；mode: "cloud" | "local" */
 export const HealthResponseSchema = z.object({
   ok: z.literal(true),
   version: z.string(),
   needsSetup: z.boolean(),
-  mode: z.enum(["gateway", "replica"]).default("gateway"),
+  mode: z.enum(["cloud", "local", "gateway", "replica"]).default("cloud"),
   ai: z.object({
     summary: z.boolean(),
     embed: z.boolean(),

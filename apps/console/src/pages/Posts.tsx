@@ -133,20 +133,20 @@ export function Posts(): import("solid-js").JSX.Element {
   // 立刻生成摘要/嵌入
   const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
   const [genMsg, setGenMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
-  // 模式与可写性（Gateway 模式支持完整读写；Replica 模式为只读副本）
-  const [serverMode, setServerMode] = createSignal<"gateway" | "replica">("gateway");
+  // 模式与可写性（Cloud 模式支持完整读写；Local 模式为只读副本）
+  const [serverMode, setServerMode] = createSignal<"cloud" | "local">("cloud");
   const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
   onMount(() => {
     void apiStore
       .getClient()
       .health()
       .then((h) => {
-        const isReplica = h.mode === "replica" || h.primary?.available === false;
-        setServerMode(isReplica ? "replica" : "gateway");
-        setPrimaryAvailable(!isReplica);
+        const isLocal = h.mode === "local" || h.mode === "replica" || h.primary?.available === false;
+        setServerMode(isLocal ? "local" : "cloud");
+        setPrimaryAvailable(!isLocal);
       })
       .catch(() => {
-        setServerMode("gateway");
+        setServerMode("cloud");
         setPrimaryAvailable(true);
       });
   });
@@ -199,7 +199,7 @@ export function Posts(): import("solid-js").JSX.Element {
 
   const saveEdit = async (): Promise<void> => {
     if (!primaryAvailable()) {
-      toast.warning("Replica 模式为只读副本，禁止在云端保存修改");
+      toast.warning("Local 模式为本地事实源，禁止在云端保存修改");
       return;
     }
     const path = editingPath();
@@ -575,7 +575,7 @@ export function Posts(): import("solid-js").JSX.Element {
         description={
           primaryAvailable()
             ? "修改将直接保存至 Cloudflare D1 边缘数据库"
-            : "当前为 Replica 模式（本地事实源），正文仅供查看与预览，请在本地修改后同步"
+            : "当前为 Local 模式（本地事实源），正文仅供查看与预览，请在本地修改后同步"
         }
         size="full"
         footer={
@@ -629,7 +629,7 @@ export function Posts(): import("solid-js").JSX.Element {
           </div>
 
           <Show when={!primaryAvailable()}>
-            <Alert variant="info" title="只读模式 (Replica)">
+            <Alert variant="info" title="只读模式 (Local)">
               {t("posts.replicaReadOnlyNotice")}
             </Alert>
           </Show>
