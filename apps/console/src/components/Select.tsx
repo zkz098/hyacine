@@ -38,6 +38,7 @@ export function Select(allProps: SelectProps): JSX.Element {
       <div class="relative flex items-center">
         <select
           id={local.id}
+          value={others.value ?? ""}
           class={`w-full px-3 py-2 pr-8 text-sm bg-[var(--bg)] border rounded-[4px] text-[var(--text)] transition-colors focus:outline-none focus:border-[var(--accent)] disabled:opacity-50 disabled:bg-[var(--g-2)] appearance-none cursor-pointer ${
             local.error
               ? "border-[var(--danger)] focus:border-[var(--danger)]"
@@ -48,10 +49,20 @@ export function Select(allProps: SelectProps): JSX.Element {
           <Show when={local.options}>
             <For each={local.options}>
               {(opt) => {
-                if (typeof opt === "string") {
-                  return <option value={opt}>{opt}</option>;
-                }
-                return <option value={opt.value}>{opt.label}</option>;
+                const optVal = typeof opt === "string" ? opt : opt.value;
+                const optLabel = typeof opt === "string" ? opt : opt.label;
+                return (
+                  <option
+                    value={optVal}
+                    selected={
+                      others.value !== undefined && others.value !== null
+                        ? String(optVal) === String(others.value)
+                        : false
+                    }
+                  >
+                    {optLabel}
+                  </option>
+                );
               }}
             </For>
           </Show>

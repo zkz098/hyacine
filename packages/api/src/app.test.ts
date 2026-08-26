@@ -49,6 +49,28 @@ describe("health", () => {
     expect(json.primary.repo).toBeNull();
   });
 
+  it("workers-ai 模式下，AI 绑定有效时 ai.summary=true", async () => {
+    const env = createTestEnv({
+      AI_SUMMARY_PROVIDER: "workers-ai",
+    });
+    const response = await request(env, "GET", "/api/health");
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as { ai: { summary: boolean; embed: boolean } };
+    expect(json.ai.summary).toBe(true);
+    expect(json.ai.embed).toBe(true);
+  });
+
+  it("workers-ai 模式下，未绑定 AI 时 ai.summary=false", async () => {
+    const env = createTestEnv({
+      AI_SUMMARY_PROVIDER: "workers-ai",
+      AI: undefined,
+    });
+    const response = await request(env, "GET", "/api/health");
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as { ai: { summary: boolean; embed: boolean } };
+    expect(json.ai.summary).toBe(false);
+  });
+
   it("github 配置齐后 primary.available=true（含 repo）", async () => {
     const env = createTestEnv();
     const db = getFakeD1(env);
