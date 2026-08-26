@@ -1,0 +1,24 @@
+{
+  "name": "@hyacine/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hyacine 官方技术文档站（基于 Astro Starlight）",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@astrojs/starlight": "^0.32.5",
+    "astro": "^5.4.2",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.3"
+  }
+}

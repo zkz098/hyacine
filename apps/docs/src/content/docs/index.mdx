@@ -1,0 +1,46 @@
+---
+title: Hyacine
+description: 云原生无头内容引擎 & AI 工具链，专为现代 Astro 博客打造
+template: splash
+hero:
+  tagline: 专为现代 Astro 博客打造的云原生无头平台与 AI 工具链。连接 Cloudflare D1、KV、R2 与 Workers AI，赋能 100% 纯静态 SSG 极速构建。
+  image:
+    html: '<div style="font-size: 5rem; line-height: 1; text-align: center; padding: 2rem;">🪻</div>'
+  actions:
+    - text: 快速上手 (5分钟)
+      link: /getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: 查看架构设计
+      link: /getting-started/concepts/
+      icon: information
+      variant: secondary
+    - text: GitHub 仓库
+      link: https://github.com/zkz098/hyacine
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## 核心特性
+
+<CardGrid stagger>
+  <Card title="SSG 实时数据集合 (Live Collections)" icon="rocket">
+    通过 `@hyacine/sdk/astro` 的 `hyacineLoader`，在 `astro build` 时直接从 Cloudflare D1 抓取数据快照，告别频繁 Git 提交与冲突，享受零 SSR 冷启动与全球 CDN 极速分发。
+  </Card>
+  <Card title="构建期 AI 向量相似图预计算" icon="star">
+    在静态构建阶段利用内存余弦相似度算法自动计算全站文章的关联拓扑，将 Top-K 相似推荐与 AI 智能摘要烘焙进纯静态 HTML。
+  </Card>
+  <Card title="三级智能摘要降级与隐私守护" icon="shield">
+    内置 `Frontmatter > AI 摘要 > 正文智能提取` 优雅降级链。严格识别加密文章，杜绝任何敏感私密内容外流至外部大模型端点。
+  </Card>
+  <Card title="多端协同：桌面端 / Web / CLI" icon="laptop">
+    配备基于 Tauri v2 + Milkdown 的桌面工作台、Solid.js Web 管理台以及功能强大的 `hyc` 命令行工具，兼顾本地离线编辑与云端无缝同步。
+  </Card>
+  <Card title="R2 零 Worker 内存直传流水线" icon="puzzle">
+    支持 SigV4 预签名直传 R2 存储桶，客户端上传资产不消耗 Worker 运行内存与带宽计费。
+  </Card>
+  <Card title="自由携带密钥 (BYOK)" icon="setting">
+    原生支持 Cloudflare Workers AI（BGE-M3 嵌入与端侧生成），亦可无缝切换至任意兼容 OpenAI 协议的模型接口。
+  </Card>
+</CardGrid>

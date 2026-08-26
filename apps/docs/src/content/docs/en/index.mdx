@@ -1,0 +1,46 @@
+---
+title: Hyacine
+description: A cloud-native headless platform & AI toolchain for modern Astro blogs
+template: splash
+hero:
+  tagline: A cloud-native headless platform & AI toolchain for modern Astro blogs. Powered by Cloudflare D1, KV, R2, and Workers AI for 100% pure Static Site Generation (SSG).
+  image:
+    html: '<div style="font-size: 5rem; line-height: 1; text-align: center; padding: 2rem;">🪻</div>'
+  actions:
+    - text: Quickstart (5 mins)
+      link: /en/getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: Core Architecture
+      link: /en/getting-started/introduction/
+      icon: information
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/zkz098/hyacine
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Key Features
+
+<CardGrid stagger>
+  <Card title="SSG Live Collections (@hyacine/sdk/astro)" icon="rocket">
+    Fetch content directly from Cloudflare D1 into Astro during `astro build`. Zero Git merge conflicts, zero SSR cold starts, instant CDN edge delivery.
+  </Card>
+  <Card title="Pre-baked AI Similarity Graph" icon="star">
+    Automatically calculates in-memory cosine similarity matrices across vector embeddings during static build, baking Top-K related articles into static HTML.
+  </Card>
+  <Card title="Intelligent Card Excerpts & Privacy Guard" icon="shield">
+    Multi-tier fallback extraction (`Frontmatter > AI Summary > Body Text`). Strictly isolates encrypted posts from external AI endpoints.
+  </Card>
+  <Card title="Multi-Surface Tooling: Desktop / Web / CLI" icon="laptop">
+    Includes a Tauri v2 + Milkdown desktop workbench, Solid.js web management console, and a unified `hyc` CLI for dual-mode local/cloud editing.
+  </Card>
+  <Card title="R2 Direct Upload Pipeline" icon="puzzle">
+    SigV4 presigned URLs allow direct client-to-R2 uploads, keeping Workers zero-memory and bandwidth cost-effective.
+  </Card>
+  <Card title="Bring Your Own Key (BYOK)" icon="setting">
+    Native support for Cloudflare Workers AI (BGE-M3 & LLMs), with seamless fallback to any OpenAI-compatible API.
+  </Card>
+</CardGrid>

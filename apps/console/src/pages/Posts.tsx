@@ -134,14 +134,15 @@ export function Posts(): import("solid-js").JSX.Element {
   const [generatingPath, setGeneratingPath] = createSignal<string | null>(null);
   const [genMsg, setGenMsg] = createSignal<{ kind: "ok" | "err"; text: string } | null>(null);
   // 模式与可写性（Cloud 模式支持完整读写；Local 模式为只读副本）
-  const [serverMode, setServerMode] = createSignal<"cloud" | "local">("cloud");
+  const [_serverMode, setServerMode] = createSignal<"cloud" | "local">("cloud");
   const [primaryAvailable, setPrimaryAvailable] = createSignal(false);
   onMount(() => {
     void apiStore
       .getClient()
       .health()
       .then((h) => {
-        const isLocal = h.mode === "local" || h.mode === "replica" || h.primary?.available === false;
+        const isLocal =
+          h.mode === "local" || h.mode === "replica" || h.primary?.available === false;
         setServerMode(isLocal ? "local" : "cloud");
         setPrimaryAvailable(!isLocal);
       })

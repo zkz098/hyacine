@@ -1,0 +1,45 @@
+/* Hyacine Starlight Custom Theme Styles */
+
+:root {
+  --sl-color-accent-low: #221c35;
+  --sl-color-accent: #7c4dff;
+  --sl-color-accent-high: #d1c4e9;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #eceff1;
+  --sl-color-gray-2: #cfd8dc;
+  --sl-color-gray-3: #90a4ae;
+  --sl-color-gray-4: #546e7a;
+  --sl-color-gray-5: #37474f;
+  --sl-color-gray-6: #263238;
+  --sl-color-black: #12141a;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #ede7f6;
+  --sl-color-accent: #651fff;
+  --sl-color-accent-high: #311b92;
+  --sl-color-white: #1e293b;
+  --sl-color-gray-1: #334155;
+  --sl-color-gray-2: #475569;
+  --sl-color-gray-3: #64748b;
+  --sl-color-gray-4: #94a3b8;
+  --sl-color-gray-5: #cbd5e1;
+  --sl-color-gray-6: #f1f5f9;
+  --sl-color-gray-7: #f8fafc;
+  --sl-color-black: #ffffff;
+}
+
+/* Hero Badge and Gradient Highlights */
+.hero-gradient {
+  background: linear-gradient(135deg, #7c4dff 0%, #00e5ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Card and Blockquote Enhancements */
+.sl-markdown-content blockquote {
+  border-left-color: var(--sl-color-accent);
+  background-color: var(--sl-color-accent-low);
+  padding: 0.75rem 1rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
