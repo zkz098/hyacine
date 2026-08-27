@@ -9,7 +9,7 @@
     "directory": "packages/cli"
   },
   "bin": {
-    "hyc": "./dist/index.js"
+    "hyc": "./dist/index.mjs"
   },
   "files": [
     "dist",
@@ -18,8 +18,8 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
     }
   },
   "publishConfig": {
@@ -29,8 +29,8 @@
     "typecheck": "oxlint -A all --type-aware --type-check .",
     "typecheck:tsc": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsdown src/index.ts -d dist --target node24 --format esm --dts --clean",
-    "dev": "tsdown src/index.ts -d dist --target node24 --format esm --watch"
+    "build": "tsdown",
+    "dev": "tsdown --watch"
   },
   "dependencies": {
     "@hyacine/contract": "workspace:*",
