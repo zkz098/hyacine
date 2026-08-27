@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-article-statistics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hyacine 官方插件：文章数据统计与 ECharts 可视化图表（ssr 注入 + 客户端水合）",
   "homepage": "https://github.com/zkz098/hyacine#readme",
   "repository": {

@@ -11,15 +11,22 @@ interface Props {
   categoryCounts?: CountItem[];
   tagCounts?: CountItem[];
   chartLabels?: ChartLabels;
+  extraProps?: {
+    monthlyPostCounts?: MonthlyPostCount[];
+    categoryCounts?: CountItem[];
+    tagCounts?: CountItem[];
+    chartLabels?: ChartLabels;
+  };
 }
 
-const {
-  enable = true,
-  monthlyPostCounts = [],
-  categoryCounts = [],
-  tagCounts = [],
-  chartLabels,
-} = Astro.props as Props;
+const props = Astro.props as Props;
+const enable = props.enable !== false;
+const monthlyPostCounts =
+  props.monthlyPostCounts ?? props.extraProps?.monthlyPostCounts ?? [];
+const categoryCounts =
+  props.categoryCounts ?? props.extraProps?.categoryCounts ?? [];
+const tagCounts = props.tagCounts ?? props.extraProps?.tagCounts ?? [];
+const chartLabels = props.chartLabels ?? props.extraProps?.chartLabels;
 ---
 
 {

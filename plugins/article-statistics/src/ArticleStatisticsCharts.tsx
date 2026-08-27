@@ -59,12 +59,12 @@ export interface ArticleStatisticsChartsProps {
   chartLabels?: ChartLabels;
 }
 
-function resolveThemeColor(token: string): string {
+function resolveThemeColor(token: string, fallback: string): string {
   if (typeof window === "undefined" || typeof document === "undefined") {
-    return token;
+    return fallback;
   }
   const value = window.getComputedStyle(document.documentElement).getPropertyValue(token).trim();
-  return value || token;
+  return value || fallback;
 }
 
 function initEChart(element: HTMLDivElement): echarts.ECharts {
@@ -101,11 +101,15 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
 
   function createMonthlyOption(): ChartOption {
     const monthlyList = props.monthlyPostCounts ?? [];
-    const lineColor = resolveThemeColor("--color-purple");
-    const pointColor = resolveThemeColor("--color-red");
-    const titleColor = resolveThemeColor("--color-purple");
-    const xAxisColor = resolveThemeColor("--color-aqua");
-    const yAxisColor = resolveThemeColor("--color-purple");
+    const lineColor = resolveThemeColor("--color-purple", "#9333ea");
+    const pointColor = resolveThemeColor("--color-red", "#ef4444");
+    const titleColor = resolveThemeColor("--color-purple", "#9333ea");
+    const xAxisColor = resolveThemeColor("--color-aqua", "#06b6d4");
+    const yAxisColor = resolveThemeColor("--color-purple", "#9333ea");
+    const axisLineColor = resolveThemeColor("--grey-4", "#cccccc");
+    const splitLineColor = resolveThemeColor("--grey-3", "#e5e5e5");
+    const tooltipBg = resolveThemeColor("--grey-1", "#ffffff");
+    const tooltipText = resolveThemeColor("--grey-7", "#333333");
 
     return {
       title: {
@@ -115,9 +119,9 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
       },
       tooltip: {
         trigger: "axis",
-        backgroundColor: "color-mix(in srgb, var(--grey-1, #fff) 94%, transparent)",
-        borderColor: "color-mix(in srgb, var(--color-purple, #9333ea) 30%, var(--grey-4, #ccc))",
-        textStyle: { color: "var(--grey-7, #333)" },
+        backgroundColor: tooltipBg,
+        borderColor: lineColor,
+        textStyle: { color: tooltipText },
       },
       grid: { left: 36, right: 24, top: 56, bottom: 28 },
       xAxis: {
@@ -127,13 +131,13 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
           color: xAxisColor,
           rotate: monthlyList.length > 10 ? 35 : 0,
         },
-        axisLine: { lineStyle: { color: "var(--grey-4, #ccc)" } },
+        axisLine: { lineStyle: { color: axisLineColor } },
       },
       yAxis: {
         type: "value",
         minInterval: 1,
         axisLabel: { color: yAxisColor },
-        splitLine: { lineStyle: { color: "var(--grey-3, #e5e5e5)" } },
+        splitLine: { lineStyle: { color: splitLineColor } },
       },
       series: [
         {
@@ -144,15 +148,14 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
           lineStyle: { width: 3, color: lineColor },
           itemStyle: { color: pointColor, opacity: 1 },
           areaStyle: {
-            color:
-              "color-mix(in srgb, var(--color-purple, #9333ea) 26%, var(--color-pink, #ec4899) 18%)",
-            opacity: 1,
+            color: lineColor,
+            opacity: 0.2,
           },
           emphasis: {
             focus: "none",
             itemStyle: { opacity: 1 },
             lineStyle: { opacity: 1 },
-            areaStyle: { opacity: 1 },
+            areaStyle: { opacity: 0.3 },
           },
         },
       ],
@@ -162,18 +165,22 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
   function createCategoryOption(): ChartOption {
     const topCategories = (props.categoryCounts ?? []).slice(0, 10);
     const palette = [
-      resolveThemeColor("--color-red"),
-      resolveThemeColor("--color-orange"),
-      resolveThemeColor("--color-yellow"),
-      resolveThemeColor("--color-pink"),
-      resolveThemeColor("--color-purple"),
-      resolveThemeColor("--color-blue"),
-      resolveThemeColor("--color-aqua"),
-      resolveThemeColor("--color-green"),
+      resolveThemeColor("--color-red", "#ef4444"),
+      resolveThemeColor("--color-orange", "#f97316"),
+      resolveThemeColor("--color-yellow", "#eab308"),
+      resolveThemeColor("--color-pink", "#ec4899"),
+      resolveThemeColor("--color-purple", "#9333ea"),
+      resolveThemeColor("--color-blue", "#3b82f6"),
+      resolveThemeColor("--color-aqua", "#06b6d4"),
+      resolveThemeColor("--color-green", "#22c55e"),
     ];
-    const titleColor = resolveThemeColor("--color-red");
-    const xAxisColor = resolveThemeColor("--color-orange");
-    const yAxisColor = resolveThemeColor("--color-pink");
+    const titleColor = resolveThemeColor("--color-red", "#ef4444");
+    const xAxisColor = resolveThemeColor("--color-orange", "#f97316");
+    const yAxisColor = resolveThemeColor("--color-pink", "#ec4899");
+    const axisLineColor = resolveThemeColor("--grey-4", "#cccccc");
+    const splitLineColor = resolveThemeColor("--grey-3", "#e5e5e5");
+    const tooltipBg = resolveThemeColor("--grey-1", "#ffffff");
+    const tooltipText = resolveThemeColor("--grey-7", "#333333");
 
     return {
       color: palette,
@@ -185,22 +192,22 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        backgroundColor: "color-mix(in srgb, var(--grey-1, #fff) 94%, transparent)",
-        borderColor: "color-mix(in srgb, var(--color-orange, #f97316) 34%, var(--grey-4, #ccc))",
-        textStyle: { color: "var(--grey-7, #333)" },
+        backgroundColor: tooltipBg,
+        borderColor: resolveThemeColor("--color-orange", "#f97316"),
+        textStyle: { color: tooltipText },
       },
       grid: { left: 56, right: 16, top: 56, bottom: 22 },
       xAxis: {
         type: "value",
         minInterval: 1,
         axisLabel: { color: xAxisColor },
-        splitLine: { lineStyle: { color: "var(--grey-3, #e5e5e5)" } },
+        splitLine: { lineStyle: { color: splitLineColor } },
       },
       yAxis: {
         type: "category",
         data: topCategories.map((item) => item.name),
         axisLabel: { color: yAxisColor },
-        axisLine: { lineStyle: { color: "var(--grey-4, #ccc)" } },
+        axisLine: { lineStyle: { color: axisLineColor } },
       },
       series: [
         {
@@ -219,18 +226,22 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
   function createTagOption(): ChartOption {
     const topTags = (props.tagCounts ?? []).slice(0, 16);
     const palette = [
-      resolveThemeColor("--color-blue"),
-      resolveThemeColor("--color-aqua"),
-      resolveThemeColor("--color-green"),
-      resolveThemeColor("--color-yellow"),
-      resolveThemeColor("--color-orange"),
-      resolveThemeColor("--color-red"),
-      resolveThemeColor("--color-pink"),
-      resolveThemeColor("--color-purple"),
+      resolveThemeColor("--color-blue", "#3b82f6"),
+      resolveThemeColor("--color-aqua", "#06b6d4"),
+      resolveThemeColor("--color-green", "#22c55e"),
+      resolveThemeColor("--color-yellow", "#eab308"),
+      resolveThemeColor("--color-orange", "#f97316"),
+      resolveThemeColor("--color-red", "#ef4444"),
+      resolveThemeColor("--color-pink", "#ec4899"),
+      resolveThemeColor("--color-purple", "#9333ea"),
     ];
-    const titleColor = resolveThemeColor("--color-blue");
-    const xAxisColor = resolveThemeColor("--color-aqua");
-    const yAxisColor = resolveThemeColor("--color-blue");
+    const titleColor = resolveThemeColor("--color-blue", "#3b82f6");
+    const xAxisColor = resolveThemeColor("--color-aqua", "#06b6d4");
+    const yAxisColor = resolveThemeColor("--color-blue", "#3b82f6");
+    const axisLineColor = resolveThemeColor("--grey-4", "#cccccc");
+    const splitLineColor = resolveThemeColor("--grey-3", "#e5e5e5");
+    const tooltipBg = resolveThemeColor("--grey-1", "#ffffff");
+    const tooltipText = resolveThemeColor("--grey-7", "#333333");
 
     return {
       color: palette,
@@ -242,9 +253,9 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        backgroundColor: "color-mix(in srgb, var(--grey-1, #fff) 94%, transparent)",
-        borderColor: "color-mix(in srgb, var(--color-blue, #3b82f6) 34%, var(--grey-4, #ccc))",
-        textStyle: { color: "var(--grey-7, #333)" },
+        backgroundColor: tooltipBg,
+        borderColor: resolveThemeColor("--color-blue", "#3b82f6"),
+        textStyle: { color: tooltipText },
       },
       grid: { left: 28, right: 24, top: 56, bottom: 36 },
       xAxis: {
@@ -254,13 +265,13 @@ export default function ArticleStatisticsCharts(props: ArticleStatisticsChartsPr
           color: xAxisColor,
           rotate: topTags.length > 8 ? 28 : 0,
         },
-        axisLine: { lineStyle: { color: "var(--grey-4, #ccc)" } },
+        axisLine: { lineStyle: { color: axisLineColor } },
       },
       yAxis: {
         type: "value",
         minInterval: 1,
         axisLabel: { color: yAxisColor },
-        splitLine: { lineStyle: { color: "var(--grey-3, #e5e5e5)" } },
+        splitLine: { lineStyle: { color: splitLineColor } },
       },
       series: [
         {

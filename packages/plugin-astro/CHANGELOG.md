@@ -1,5 +1,11 @@
 # @hyacine/plugin-astro
 
+## 0.2.2
+
+### Patch Changes
+
+- fix: support extraProps merging in HyacineOutlet and harden ECharts color resolution in article statistics plugin
+
 ## 0.2.1
 
 ### Patch Changes

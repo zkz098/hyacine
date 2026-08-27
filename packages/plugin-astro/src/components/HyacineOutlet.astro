@@ -6,11 +6,16 @@ import slots from "virtual:hyacine/slots-manifest";
 export interface Props {
   name: string;
   context?: HyacineArticleContext | Record<string, unknown> | null;
+  extraProps?: Record<string, unknown>;
   [key: string]: any;
 }
 
-const { name, context = null, ...extraProps } = Astro.props;
+const { name, context = null, extraProps: explicitExtraProps, ...restProps } = Astro.props;
 const SlotComponent = slots ? slots[name] : null;
+const extraProps = {
+  ...(explicitExtraProps && typeof explicitExtraProps === "object" ? explicitExtraProps : {}),
+  ...restProps,
+};
 ---
 
 {

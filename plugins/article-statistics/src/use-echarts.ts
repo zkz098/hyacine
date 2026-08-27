@@ -22,6 +22,7 @@ export function useECharts(options: UseEChartsOptions) {
     if (!instance) return;
 
     setChart(instance);
+    instance.setOption(options.option(), { notMerge: true });
 
     const observer = new ResizeObserver(() => {
       instance.resize();

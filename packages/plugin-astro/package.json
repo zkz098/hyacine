@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-astro",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Hyacine Astro 插件集成：双模注入（声明式 <HyacineOutlet> + 零侵入 AST 注入）与 Vite 虚拟模块分发",
   "homepage": "https://github.com/zkz098/hyacine#readme",
   "repository": {
