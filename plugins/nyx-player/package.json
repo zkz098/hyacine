@@ -1,6 +1,6 @@
 {
   "name": "@hyacine/plugin-nyx-player",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Hyacine 官方插件：NyxPlayer 音乐播放器集成（ssr 注入 + 客户端水合）",
   "homepage": "https://github.com/zkz098/hyacine#readme",
   "repository": {
@@ -25,7 +25,7 @@
   "dependencies": {
     "@hyacine/contract": "workspace:*",
     "@hyacine/plugin-core": "workspace:*",
-    "nyx-player-solid": "^0.1.6",
+    "nyx-player-solid": "^0.1.7",
     "solid-js": "^1.9.0"
   },
   "devDependencies": {
