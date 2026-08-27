@@ -12,3 +12,5 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+minimumReleaseAgeExclude:
+  - nyx-player-solid@0.1.6

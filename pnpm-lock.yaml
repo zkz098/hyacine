@@ -449,8 +449,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-core
       nyx-player-solid:
-        specifier: ^0.1.5
-        version: 0.1.5
+        specifier: ^0.1.6
+        version: 0.1.6
       solid-js:
         specifier: ^1.9.0
         version: 1.9.15
@@ -4984,8 +4984,8 @@ packages:
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
 
-  nyx-player-solid@0.1.5:
-    resolution: {integrity: sha512-lw+6lyetr1gzsdeMBTsXTIv2ELTEGvp7CeYAN783Xaf/xm4tPRwI192quKq7xreLqc3GiKJqZ4yfM7amKVXxNg==}
+  nyx-player-solid@0.1.6:
+    resolution: {integrity: sha512-F2HaTGismP4cP1HaMNkd8MRa0qiDVePD1MWEx4MQdaE8VSNywfNEcYW8ziznJar1f4drkBxb/DWd8vJFZ+haTA==}
     engines: {node: '>=22.12.0'}
 
   obug@2.1.4:
@@ -10637,7 +10637,7 @@ snapshots:
     dependencies:
       boolbase: 1.0.0
 
-  nyx-player-solid@0.1.5:
+  nyx-player-solid@0.1.6:
     dependencies:
       solid-element: 1.9.2(solid-js@1.9.15)
       solid-js: 1.9.15

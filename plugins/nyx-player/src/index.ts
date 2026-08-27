@@ -32,7 +32,7 @@ export function nyxPlayer(options: NyxPlayerPluginOptions = {}): PluginManifest 
 
   return definePlugin({
     name: "@hyacine/plugin-nyx-player",
-    version: "0.1.0",
+    version: "0.1.1",
     minRenderCapability: "ssr",
     supportedPlatforms: ["astro"],
     entry: [
