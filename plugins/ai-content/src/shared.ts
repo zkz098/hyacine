@@ -37,16 +37,30 @@ const summaryCache = new Map<string, ResolvedAiSummary | null>();
 const similarCache = new Map<string, ResolvedSimilarPost[]>();
 const clientCache = new Map<string, HyacineAiClient | null>();
 
+function readEnvVar(name: string): string | undefined {
+  const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env;
+  const metaVal = metaEnv?.[name];
+  if (typeof metaVal === "string" && metaVal.trim()) {
+    return metaVal.trim();
+  }
+
+  const procEnv = (
+    globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }
+  )?.process?.env;
+  const procVal = procEnv?.[name];
+  if (typeof procVal === "string" && procVal.trim()) {
+    return procVal.trim();
+  }
+
+  return undefined;
+}
+
 function readApiUrl(): string | undefined {
-  const viteValue = import.meta.env.HYACINE_API_URL;
-  const value = typeof viteValue === "string" ? viteValue : undefined;
-  return value?.trim() || process.env.HYACINE_API_URL?.trim();
+  return readEnvVar("HYACINE_API_URL");
 }
 
 function readToken(): string | undefined {
-  const viteValue = import.meta.env.HYACINE_READ_TOKEN;
-  const value = typeof viteValue === "string" ? viteValue : undefined;
-  return value?.trim() || process.env.HYACINE_READ_TOKEN?.trim();
+  return readEnvVar("HYACINE_READ_TOKEN");
 }
 
 function getAiClient(
