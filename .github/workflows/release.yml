@@ -37,13 +37,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Packages
+        run: pnpm run build
+
       - name: Run Quality Checks
         run: |
           pnpm run typecheck
           pnpm run test
-
-      - name: Build Packages
-        run: pnpm run build
 
       - name: Create Release Pull Request or Publish to NPM
         id: changesets

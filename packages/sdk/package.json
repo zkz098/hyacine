@@ -16,14 +16,17 @@
   "type": "module",
   "exports": {
     ".": {
+      "development": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
     "./astro": {
+      "development": "./src/astro/index.ts",
       "types": "./dist/astro/index.d.mts",
       "default": "./dist/astro/index.mjs"
     },
     "./ai": {
+      "development": "./src/ai/index.ts",
       "types": "./dist/ai/index.d.mts",
       "default": "./dist/ai/index.mjs"
     }
