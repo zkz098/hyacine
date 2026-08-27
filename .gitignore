@@ -3,6 +3,7 @@ node_modules/
 dist/
 # 构建生成的声明文件不应出现在 src/ 中（产物在 dist/）
 **/src/**/*.d.ts
+!packages/cli/src/globals.d.ts
 out/
 coverage/
 .wrangler/

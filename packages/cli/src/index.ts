@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name("hyc")
   .description("hyacine CLI")
-  .version("0.1.0")
+  .version(__VERSION__)
   .option("--local", "force local mode", false)
   .option("--json", "json output", false);
 

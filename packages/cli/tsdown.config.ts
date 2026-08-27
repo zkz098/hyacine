@@ -1,4 +1,5 @@
 import { defineConfig } from "tsdown";
+import packageJson from "./package.json" with { type: "json" };
 
 export default defineConfig({
   entry: "src/index.ts",
@@ -8,6 +9,9 @@ export default defineConfig({
   deps: {
     neverBundle: ["commander", "gray-matter", "yaml", "tar"],
     alwaysBundle: ["@hyacine/contract", "zod"],
+  },
+  define: {
+    __VERSION__: JSON.stringify(packageJson.version),
   },
   dts: true,
   sourcemap: false,
