@@ -1,0 +1,70 @@
+---
+import ArticleStatisticsCharts, {
+  type CountItem,
+  type MonthlyPostCount,
+  type ChartLabels,
+} from "./ArticleStatisticsCharts";
+
+interface Props {
+  enable?: boolean;
+  monthlyPostCounts?: MonthlyPostCount[];
+  categoryCounts?: CountItem[];
+  tagCounts?: CountItem[];
+  chartLabels?: ChartLabels;
+}
+
+const {
+  enable = true,
+  monthlyPostCounts = [],
+  categoryCounts = [],
+  tagCounts = [],
+  chartLabels,
+} = Astro.props as Props;
+---
+
+{
+  enable ? (
+    <ArticleStatisticsCharts
+      client:load
+      monthlyPostCounts={monthlyPostCounts}
+      categoryCounts={categoryCounts}
+      tagCounts={tagCounts}
+      chartLabels={chartLabels}
+    />
+  ) : null
+}
+
+<style is:global>
+  .hyacine-statistics-charts.chart-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .hyacine-statistics-charts .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+
+  .hyacine-statistics-charts .chart-card {
+    border-radius: 0.875rem;
+    background: var(--surface-card, color-mix(in srgb, var(--grey-1, #fff) 96%, transparent));
+    border: 1px solid var(--border-color-card, color-mix(in srgb, var(--grey-4, #ccc) 24%, transparent));
+    box-shadow: var(--shadow-card-soft, 0 4px 16px rgba(0, 0, 0, 0.04));
+    padding: 1.25rem 1rem;
+    overflow: hidden;
+  }
+
+  .hyacine-statistics-charts .chart-canvas {
+    width: 100%;
+    height: 320px;
+  }
+
+  @media (min-width: 48rem) {
+    .hyacine-statistics-charts .chart-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

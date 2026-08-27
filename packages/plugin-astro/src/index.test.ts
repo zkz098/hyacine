@@ -39,7 +39,7 @@ describe("plugin-astro generator", () => {
     ]);
     expect(code).toContain('import TestWidget0 from "/path/to/Widget.astro"');
     expect(code).toContain("client:visible");
-    expect(code).toContain('label="Hello"');
+    expect(code).toContain('label={"Hello"}');
     expect(code).toContain("maxCount={5}");
   });
 

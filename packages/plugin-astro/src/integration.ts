@@ -37,7 +37,7 @@ export function hyacinePlugin(options: HyacinePluginIntegrationOptions = {}): As
               logger.info(`[hyacine] Loaded configuration from ${configPath}`);
             } catch (err) {
               logger.error(
-                `[hyacine] Failed to load configuration from ${configPath}: ${err instanceof Error ? err.stack ?? err.message : String(err)}`,
+                `[hyacine] Failed to load configuration from ${configPath}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`,
               );
               pluginConfig = {
                 injectPoints: {},

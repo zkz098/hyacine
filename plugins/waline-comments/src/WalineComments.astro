@@ -1,0 +1,78 @@
+---
+interface Props {
+  serverURL?: string;
+  lang?: string;
+  dark?: boolean | string;
+  path?: string;
+}
+
+const { serverURL, lang, dark, path } = Astro.props as Props;
+
+// data 属性只能承载字符串；dark 支持 boolean | string，序列化为 JSON 供客户端还原
+const serializedDark = dark === undefined || dark === null ? "" : JSON.stringify(dark);
+---
+
+{
+  serverURL ? (
+    <div
+      class="hyacine-waline"
+      data-server-url={serverURL}
+      data-lang={lang ?? ""}
+      data-dark={serializedDark}
+      data-path={path ?? ""}
+      aria-label="评论区"
+    >
+      <script>
+        import { init } from "@waline/client";
+        import "@waline/client/style";
+
+        type WalineMountData = {
+          serverURL: string;
+          lang?: string;
+          dark?: boolean | string;
+          path?: string;
+        };
+
+        const mount = (): void => {
+          const el = document.querySelector<HTMLElement>(".hyacine-waline");
+          if (!el) return;
+
+          const serverURL = el.dataset.serverURL || "";
+          if (!serverURL) return;
+
+          const data: WalineMountData = { serverURL };
+
+          const lang = el.dataset.lang || "";
+          if (lang) data.lang = lang;
+
+          const darkRaw = el.dataset.dark || "";
+          if (darkRaw) {
+            try {
+              const parsed: unknown = JSON.parse(darkRaw);
+              data.dark = parsed as boolean | string;
+            } catch {
+              data.dark = darkRaw;
+            }
+          }
+
+          const path = el.dataset.path || "";
+          if (path) data.path = path;
+
+          init({
+            el,
+            serverURL: data.serverURL,
+            lang: data.lang,
+            dark: data.dark,
+            path: data.path,
+          });
+        };
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", mount);
+        } else {
+          mount();
+        }
+      </script>
+    </div>
+  ) : null
+}

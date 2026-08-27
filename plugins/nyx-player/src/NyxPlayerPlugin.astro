@@ -1,0 +1,42 @@
+---
+import NyxPlayerWrapper, { type NyxPlayerPlaylist } from "./NyxPlayerWrapper";
+
+interface Props {
+  enable?: boolean;
+  urls?: NyxPlayerPlaylist[];
+  preset?: "nyx" | "shokax";
+  darkModeTarget?: string;
+  metingBaseURL?: string;
+  metingUrlSource?: "outer" | "proxy";
+  showBtn?: string;
+  playBtn?: string;
+}
+
+const {
+  enable = true,
+  urls = [],
+  preset = "shokax",
+  darkModeTarget,
+  metingBaseURL,
+  metingUrlSource,
+  showBtn = "#nyx-show-btn",
+  playBtn = "#nyx-play-btn",
+} = Astro.props as Props;
+
+const shouldRender = enable && Array.isArray(urls) && urls.length > 0;
+---
+
+{
+  shouldRender ? (
+    <NyxPlayerWrapper
+      client:idle
+      urls={urls}
+      preset={preset}
+      darkModeTarget={darkModeTarget}
+      metingBaseURL={metingBaseURL}
+      metingUrlSource={metingUrlSource}
+      showBtn={showBtn}
+      playBtn={playBtn}
+    />
+  ) : null
+}

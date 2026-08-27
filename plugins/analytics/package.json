@@ -1,0 +1,33 @@
+{
+  "name": "@hyacine/plugin-analytics",
+  "version": "0.1.0",
+  "description": "Hyacine 官方插件：Google Analytics 4 与 Umami 网站统计（runtime-only，head 动态注入）",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "plugins/analytics"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@hyacine/contract": "workspace:*",
+    "@hyacine/plugin-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

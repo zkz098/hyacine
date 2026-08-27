@@ -1,0 +1,93 @@
+---
+import { resolvePostAiSummary } from "./shared";
+
+interface Props {
+  hyacineArticle?: Record<string, unknown> | null;
+  /** 总开关（来自插件配置，false 时组件短路不渲染） */
+  enable?: boolean;
+  title?: string;
+  showModel?: boolean;
+  /** 页面通过 HyacineOutlet extraProps 传入的文章标识/正文 */
+  postId?: string;
+  postBody?: string;
+  apiUrl?: string;
+  token?: string;
+}
+
+const props = Astro.props as Props;
+const enabled = props.enable !== false;
+const title = typeof props.title === "string" && props.title ? props.title : "AI 摘要";
+const showModel = props.showModel === true;
+
+const summary = enabled
+  ? await resolvePostAiSummary({
+      data: props.hyacineArticle,
+      postId: props.postId,
+      postBody: props.postBody,
+      enable: true,
+      apiUrl: props.apiUrl,
+      token: props.token,
+    })
+  : null;
+---
+
+{
+  summary ? (
+    <section class="ai-summary-card" aria-label="AI 摘要">
+      <div class="ai-summary-card__title">
+        <span class="ai-summary-card__title-icon" aria-hidden="true">🤖</span>
+        <span>{title}</span>
+      </div>
+
+      <p class="ai-summary-card__content">{summary.content}</p>
+
+      {showModel && summary.model && (
+        <div class="ai-summary-card__meta">
+          <span>{summary.model}</span>
+        </div>
+      )}
+    </section>
+  ) : null
+}
+
+<style>
+  .ai-summary-card {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    padding: 0.875rem 1rem;
+    border-radius: 0.625rem;
+    background: var(--grey-2, rgba(127, 127, 127, 0.08));
+    border: 1px solid var(--grey-3, rgba(127, 127, 127, 0.18));
+  }
+
+  .ai-summary-card__title {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--primary-color, var(--color-blue, #3b82f6));
+    font-weight: 600;
+    margin-bottom: 0.625rem;
+  }
+
+  .ai-summary-card__title-icon {
+    font-size: 1em;
+    line-height: 1;
+  }
+
+  .ai-summary-card__content {
+    margin: 0;
+    line-height: 1.75;
+    color: var(--text-color, #333);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .ai-summary-card__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.625rem;
+    font-size: 0.75rem;
+    color: var(--grey-5, #999);
+  }
+</style>

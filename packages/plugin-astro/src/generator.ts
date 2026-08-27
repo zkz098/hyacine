@@ -47,16 +47,10 @@ function serializeProps(props?: Record<string, unknown>): string {
   return Object.entries(props)
     .map(([key, value]) => {
       if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) return "";
-      if (typeof value === "string") {
-        const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-        return ` ${key}="${escaped}"`;
-      } else if (typeof value === "number" || typeof value === "boolean") {
-        return ` ${key}={${value}}`;
-      } else if (value === null || value === undefined) {
+      if (value === null || value === undefined) {
         return "";
-      } else {
-        return ` ${key}={${JSON.stringify(value)}}`;
       }
+      return ` ${key}={${JSON.stringify(value)}}`;
     })
     .join("");
 }
@@ -102,9 +96,7 @@ export function generateSlotAstroComponent(slotName: string, entries: InjectEntr
 
   const importsBlock = imports.length > 0 ? `\n${imports.join("\n")}` : "";
   const renderedContent =
-    renderTags.length > 0
-      ? `  ${renderTags.join("\n  ")}\n  <slot />`
-      : `  <slot />`;
+    renderTags.length > 0 ? `  ${renderTags.join("\n  ")}\n  <slot />` : `  <slot />`;
 
   return `---
 // @ts-nocheck

@@ -1,0 +1,34 @@
+{
+  "name": "@hyacine/plugin-ai-content",
+  "version": "0.1.0",
+  "description": "Hyacine 官方插件：AI 文章摘要卡片与相近文章推荐（ssr 构建期预计算）",
+  "homepage": "https://github.com/zkz098/hyacine#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zkz098/hyacine.git",
+    "directory": "plugins/ai-content"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@hyacine/contract": "workspace:*",
+    "@hyacine/plugin-core": "workspace:*",
+    "@hyacine/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

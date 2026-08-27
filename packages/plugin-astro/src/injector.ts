@@ -62,8 +62,8 @@ export function matchesSingleElement(node: any, selectorPart: string): boolean {
     if (!classAttr || typeof classAttr.value !== "string") {
       return false;
     }
-    const nodeClasses = classAttr.value.split(/\s+/).filter(Boolean);
-    const hasAllClasses = classes.every((c) => nodeClasses.includes(c));
+    const nodeClasses = new Set(classAttr.value.split(/\s+/).filter(Boolean));
+    const hasAllClasses = classes.every((c) => nodeClasses.has(c));
     if (!hasAllClasses) {
       return false;
     }
@@ -114,10 +114,7 @@ export function getOffsetFromLineCol(code: string, line: number, column: number)
   return Math.min(code.length, currentOffset + (column - 1));
 }
 
-export function getNodeOffsets(
-  code: string,
-  node: any,
-): { start: number; end: number } | null {
+export function getNodeOffsets(code: string, node: any): { start: number; end: number } | null {
   if (!node?.position?.start || !node?.position?.end) return null;
 
   const startLine = node.position.start.line;
