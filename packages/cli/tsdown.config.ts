@@ -3,11 +3,13 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: "src/index.ts",
   format: "esm",
-  target: "node22",
+  target: "node24",
   clean: true,
-  external: ["commander", "gray-matter", "yaml", "tar"],
-  noExternal: ["@hyacine/contract", "zod"],
-  dts: false,
+  deps: {
+    neverBundle: ["commander", "gray-matter", "yaml", "tar"],
+    alwaysBundle: ["@hyacine/contract", "zod"],
+  },
+  dts: true,
   sourcemap: false,
   unbundle: false,
 });

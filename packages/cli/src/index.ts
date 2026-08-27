@@ -1,23 +1,21 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative } from "node:path";
+import { autoSlug, getCollections, HyacineApiError, HyacineClient } from "@hyacine/contract";
 import { Command } from "commander";
 import matter from "gray-matter";
-import { HyacineClient, HyacineApiError } from "@hyacine/contract";
-import { findProjectRoot, loadProjectConfig, resolveProjectId } from "./config/project";
-import { loadRemoteState, saveRemoteState, isRemoteConfigured } from "./remote/state";
-import { t } from "./i18n";
-import { autoSlug } from "@hyacine/contract";
-import { materializeSummary, hasUpToDateSummary } from "./frontmatter";
-import { installBlog } from "./services/install";
 import { generateCollectionsFile } from "./collections/generate";
-import { getCollections } from "@hyacine/contract";
-import { scanPosts, findPostByQuery, createPost } from "./services/posts";
-import { buildSyncPayload, chunkText } from "./services/sync";
+import { findProjectRoot, loadProjectConfig, resolveProjectId } from "./config/project";
+import { hasUpToDateSummary, materializeSummary } from "./frontmatter";
+import { t } from "./i18n";
+import { isRemoteConfigured, loadRemoteState, saveRemoteState } from "./remote/state";
 import { createBackup } from "./services/backup";
 import { findBuildCommand, runCommand } from "./services/build";
-import { isGitRepo, gitAddAll, gitCommit, gitPush } from "./services/git";
+import { gitAddAll, gitCommit, gitPush, isGitRepo } from "./services/git";
+import { installBlog } from "./services/install";
+import { createPost, findPostByQuery, scanPosts } from "./services/posts";
+import { buildSyncPayload, chunkText } from "./services/sync";
 
 const program = new Command();
 program
@@ -136,7 +134,7 @@ program
           packageManager: pm,
         });
         console.log(
-          `✔ 安装完成：${result.clonedInto}${result.installed ? "（已安装依赖）" : "（未安装依赖，可在目录内执行 pnpm install）"}`,
+          `√ 安装完成：${result.clonedInto}${result.installed ? "（已安装依赖）" : "（未安装依赖，可在目录内执行 pnpm install）"}`,
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -461,10 +459,16 @@ program
       console.log(`Last sync: ${state.lastSync.at} (${state.lastSync.paths.length} posts)`);
     }
     try {
-      const client = new HyacineClient({ baseUrl: state.apiUrl ?? "", token: state.apiToken });
+      const client = new HyacineClient({
+        baseUrl: state.apiUrl ?? "",
+        token: state.apiToken,
+      });
       const health = await client.health();
       console.log(
-        t("status.ai", { summary: String(health.ai.summary), embed: String(health.ai.embed) }),
+        t("status.ai", {
+          summary: String(health.ai.summary),
+          embed: String(health.ai.embed),
+        }),
       );
       if (health.needsSetup) console.log(t("status.needsSetup"));
     } catch {
@@ -592,7 +596,10 @@ program
         }
         saveRemoteState({
           ...state,
-          lastSync: { at: new Date().toISOString(), paths: posts.map((p) => p.path) },
+          lastSync: {
+            at: new Date().toISOString(),
+            paths: posts.map((p) => p.path),
+          },
         });
       } catch (err) {
         handleApiError(err);
@@ -650,7 +657,10 @@ program
           const res = await client.aiSummary({ hash: post.hash, content: raw });
           if (opts.dryRun === true) {
             console.log(
-              t("ai.summary.dryRun", { path: post.path, summary: res.summary.slice(0, 80) }),
+              t("ai.summary.dryRun", {
+                path: post.path,
+                summary: res.summary.slice(0, 80),
+              }),
             );
             continue;
           }
@@ -753,7 +763,12 @@ program
       if (chunks.length === 0) continue;
       try {
         const res = await client.aiEmbed({ hash: post.hash, chunks });
-        console.log(t("ai.embed.done", { path: post.path, count: String(res.chunkCount) }));
+        console.log(
+          t("ai.embed.done", {
+            path: post.path,
+            count: String(res.chunkCount),
+          }),
+        );
       } catch (err) {
         handleApiError(err);
       }
@@ -823,7 +838,7 @@ program
       return;
     }
     console.log(
-      `✔ 提取 ${result.file.collections.length} 个集合（来源 ${sourceLabel}）${result.overwritten ? "（已覆盖旧文件）" : ""}`,
+      `√ 提取 ${result.file.collections.length} 个集合（来源 ${sourceLabel}）${result.overwritten ? "（已覆盖旧文件）" : ""}`,
     );
     for (const c of result.file.collections) {
       const fields = c.ui.fields.length > 0 ? `，${c.ui.fields.length} 个字段` : "";
@@ -832,7 +847,7 @@ program
     }
     if (result.file.warnings.length > 0) {
       for (const w of result.file.warnings) {
-        console.log(`  ⚠ ${w}`);
+        console.log(`  ! ${w}`);
       }
     }
     console.log(`→ ${result.outPath}`);
