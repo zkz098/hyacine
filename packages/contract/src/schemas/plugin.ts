@@ -94,6 +94,28 @@ export const InjectEntrySchema = z.union([
 ]);
 export type InjectEntry = z.infer<typeof InjectEntrySchema>;
 
+/** 主题调色板与设计 Token 配置 */
+export const ThemePaletteConfigSchema = z.object({
+  /** 全局根变量（作用于 :root） */
+  root: z.record(z.string(), z.string()).optional(),
+  /** 浅色模式变量（作用于 :root, [data-theme="light"], .light 等） */
+  light: z.record(z.string(), z.string()).optional(),
+  /** 深色模式变量（作用于 [data-theme="dark"], .dark 等） */
+  dark: z.record(z.string(), z.string()).optional(),
+  /** 额外引入的 CSS 样式文件路径列表 */
+  cssFiles: z.array(z.string()).optional(),
+  /** 自定义内联 CSS 代码片段 */
+  customCss: z.string().optional(),
+});
+export type ThemePaletteConfig = z.infer<typeof ThemePaletteConfigSchema>;
+
+/** 主题配置 */
+export const ThemeConfigSchema = z.object({
+  /** 调色板与样式 Token */
+  palette: ThemePaletteConfigSchema.optional(),
+});
+export type ThemeConfig = z.infer<typeof ThemeConfigSchema>;
+
 /** 插件 Manifest */
 export const PluginManifestSchema = z.object({
   name: z.string().min(1),
@@ -101,9 +123,11 @@ export const PluginManifestSchema = z.object({
   minRenderCapability: RenderCapabilitySchema,
   supportedPlatforms: z.array(PluginPlatformTypeSchema).optional(),
   compatibleAPIPattern: z.string().optional(),
-  entry: z.array(InjectEntrySchema),
+  entry: z.array(InjectEntrySchema).default([]),
+  theme: ThemeConfigSchema.optional(),
 });
 export type PluginManifest = z.infer<typeof PluginManifestSchema>;
+export type PluginManifestInput = z.input<typeof PluginManifestSchema>;
 
 /** 插件系统主配置 */
 export const HyacinePluginSystemConfigSchema = z.object({

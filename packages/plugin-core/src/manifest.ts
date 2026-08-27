@@ -9,12 +9,17 @@ import {
   type InjectPointValue,
   type InjectPosition,
   type PluginManifest,
+  type PluginManifestInput,
   type PluginPlatformType,
   type RenderCapability,
   type RuntimeOnlyEntry,
   type SSREntry,
   type StandardSlotName,
+  type ThemeConfig,
+  type ThemePaletteConfig,
   PluginManifestSchema,
+  ThemeConfigSchema,
+  ThemePaletteConfigSchema,
 } from "@hyacine/contract";
 
 export type {
@@ -28,19 +33,23 @@ export type {
   InjectPointValue,
   InjectPosition,
   PluginManifest,
+  PluginManifestInput,
   PluginPlatformType,
   RenderCapability,
   RuntimeOnlyEntry,
   SSREntry,
   StandardSlotName,
+  ThemeConfig,
+  ThemePaletteConfig,
 };
+export { ThemeConfigSchema, ThemePaletteConfigSchema };
 
 export type PluginFunction<TOptions = any> = (options: TOptions) => PluginManifest;
 
 /**
  * 声明并校验一个 Hyacine 插件 Manifest
  */
-export function definePlugin(manifest: PluginManifest): PluginManifest {
+export function definePlugin(manifest: PluginManifestInput): PluginManifest {
   const result = PluginManifestSchema.safeParse(manifest);
   if (!result.success) {
     throw new Error(

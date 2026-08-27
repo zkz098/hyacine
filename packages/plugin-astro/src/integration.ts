@@ -60,6 +60,9 @@ export function hyacinePlugin(options: HyacinePluginIntegrationOptions = {}): As
           postCollection: "posts",
         };
 
+        // 自动注入主题样式 (SSR 构建期打包进静态 HTML Head)
+        injectScript("page-ssr", 'import "virtual:hyacine/theme.css";');
+
         // 自动注入客户端 Runtime 初始化脚本
         injectScript("page", 'import "virtual:hyacine/runtime";');
 

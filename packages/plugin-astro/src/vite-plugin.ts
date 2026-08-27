@@ -3,7 +3,9 @@ import type { Plugin as VitePlugin } from "vite";
 import {
   type HyacinePluginSystemConfig,
   collectRuntimeEntries,
+  generatePaletteCSS,
   groupEntriesBySlot,
+  mergeThemePalettes,
   normalizeInjectPoints,
 } from "@hyacine/plugin-core";
 import { generateRuntimeModuleCode, generateSlotAstroComponent } from "./generator";
@@ -14,6 +16,9 @@ export const RESOLVED_RUNTIME_ID = "\0virtual:hyacine/runtime";
 
 export const VIRTUAL_CONFIG_ID = "virtual:hyacine/config";
 export const RESOLVED_CONFIG_ID = "\0virtual:hyacine/config";
+
+export const VIRTUAL_THEME_CSS_ID = "virtual:hyacine/theme.css";
+export const RESOLVED_THEME_CSS_ID = "\0virtual:hyacine/theme.css";
 
 export const VIRTUAL_SLOTS_MANIFEST_ID = "virtual:hyacine/slots-manifest";
 export const RESOLVED_SLOTS_MANIFEST_ID = "\0virtual:hyacine/slots-manifest";
@@ -57,6 +62,9 @@ export function createHyacineVitePlugin(options: HyacineVitePluginOptions): Vite
       if (id === VIRTUAL_CONFIG_ID) {
         return RESOLVED_CONFIG_ID;
       }
+      if (id === VIRTUAL_THEME_CSS_ID) {
+        return RESOLVED_THEME_CSS_ID;
+      }
       if (id === VIRTUAL_SLOTS_MANIFEST_ID) {
         return RESOLVED_SLOTS_MANIFEST_ID;
       }
@@ -75,6 +83,11 @@ export function createHyacineVitePlugin(options: HyacineVitePluginOptions): Vite
 
       if (id === RESOLVED_CONFIG_ID) {
         return `export default ${JSON.stringify(config)};`;
+      }
+
+      if (id === RESOLVED_THEME_CSS_ID || id === VIRTUAL_THEME_CSS_ID) {
+        const mergedPalette = mergeThemePalettes(manifests);
+        return generatePaletteCSS(mergedPalette);
       }
 
       if (id === RESOLVED_SLOTS_MANIFEST_ID) {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  createHyacineVitePlugin,
   generateRuntimeModuleCode,
   generateSlotAstroComponent,
   injectAstroAST,
   matchesSelector,
+  RESOLVED_THEME_CSS_ID,
+  VIRTUAL_THEME_CSS_ID,
 } from "./index";
 
 describe("plugin-astro generator", () => {
@@ -147,5 +150,43 @@ const title = "My Post";
     );
     expect(result!.code).toContain("<HyacineSlot_PostHeader");
     expect(result!.code).toContain("<HyacineSlot_PostFooter");
+  });
+});
+
+describe("plugin-astro vite-plugin virtual theme.css", () => {
+  it("正确解析并加载 virtual:hyacine/theme.css 虚拟样式", async () => {
+    const plugin = createHyacineVitePlugin({
+      config: {
+        injectPoints: {},
+        postCollection: "posts",
+        plugins: [
+          {
+            name: "plugin-theme-custom",
+            version: "1.0.0",
+            minRenderCapability: "runtime-only",
+            entry: [],
+            theme: {
+              palette: {
+                root: { "--brand-color": "#4f46e5" },
+                dark: { "bg-color": "#0f172a" },
+                customCss: "a { text-decoration: none; }",
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const resolveIdFn = plugin.resolveId as (id: string) => string | null;
+    const loadFn = plugin.load as (id: string) => Promise<string | null> | string | null;
+
+    const resolvedId = resolveIdFn.call({} as any, VIRTUAL_THEME_CSS_ID);
+    expect(resolvedId).toBe(RESOLVED_THEME_CSS_ID);
+
+    const cssContent = await loadFn.call({} as any, RESOLVED_THEME_CSS_ID);
+    expect(cssContent).toContain("--brand-color: #4f46e5;");
+    expect(cssContent).toContain('[data-theme="dark"]');
+    expect(cssContent).toContain("--bg-color: #0f172a;");
+    expect(cssContent).toContain("a { text-decoration: none; }");
   });
 });
